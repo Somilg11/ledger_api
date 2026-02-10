@@ -1,0 +1,34 @@
+LEDGER_API
+
+- basic server setup in typescript
+- mongodb connection
+- env setup
+- schema design
+- email password validation using regex and bcrypt hashng
+- method to compare password
+- authentication routes
+- controllers implementations
+- JSON web token
+- cookie parser
+- login api implementation
+- nodemailer setup
+- function to send emails
+- sending registeration emails
+- creating account model
+- account/routes apis
+- account comtroller
+- auth middleware
+- understanding how banking system works
+- creating transaction model
+- creating ledger model
+- transaction controller
+- validating idempotency
+- idempotency validation controller
+- checking account status controller
+- deriving sender balance form ledger (aggregation pipeline)
+- creating transaction api
+- fetching balance api
+- creating blacklist model
+- logout api
+- adding security in overall api system
+- dockerization
