@@ -1,15 +1,27 @@
-import express, { type Request, type Response } from 'express';
+import express from 'express';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import authRoutes from './api/routes/auth.routes';
+import { redisRateLimiter } from './api/middlewares/redisRateLimit.middleware';
+import { idempotencyMiddleware } from './api/middlewares/idempotency.middleware';
 
-// Create and configure the Express application
 const app = express();
 
-// Basic middleware (example: JSON parsing)
+// Middlewares
+app.use(helmet());
 app.use(express.json());
+app.use(morgan('combined'));
 
-// Health/root route
-app.get('/', (_req: Request, res: Response) => {
-  res.send('Hello from ledger API (TypeScript)');
-});
+// Redis-backed rate limiting
+app.use(redisRateLimiter);
 
-// Export the configured app; server startup lives in server.ts
+// Idempotency for mutation requests
+app.use(idempotencyMiddleware);
+
+// Routes
+app.use('/api/v1/auth', authRoutes);
+
+// basic health
+app.get('/health', (_req, res) => res.json({ status: 'healthy', timestamp: new Date().toISOString() }));
+
 export default app;
