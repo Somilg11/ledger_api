@@ -521,6 +521,63 @@ X-API-Version: v1```json
 ```json
 {
   "qrCode": "data:image/png;base64,...",
+
+---
+
+## Phase 2 — Accounts, Transactions & Ledger
+
+This section summarizes the Phase 2 endpoints for transactions, ledger entries, and account management. These endpoints assume JWT Bearer authentication and support idempotency for mutation endpoints via `X-Idempotency-Key` header.
+
+### Accounts
+
+- POST `/api/v1/accounts`
+  - Create an account
+  - Body: { userId, accountType, currency }
+  - Response: created account object
+
+- GET `/api/v1/accounts/:id`
+  - Get account by id
+
+- GET `/api/v1/accounts/user/:userId`
+  - List accounts for a user
+
+- PUT `/api/v1/accounts/:id`
+  - Update account metadata/status
+
+- DELETE `/api/v1/accounts/:id`
+  - Close account (soft-delete)
+
+### Transactions
+
+- POST `/api/v1/transactions`
+  - Create a transfer between accounts
+  - Headers: `Authorization: Bearer <token>`, `X-Idempotency-Key: <uuid>` (recommended)
+  - Body: { fromAccount, toAccount, amount, currency?, reference?, metadata? }
+  - Response: transaction object with status (PENDING/COMPLETED/FAILED)
+
+- GET `/api/v1/transactions/:id`
+  - Fetch transaction by id
+
+- GET `/api/v1/accounts/:id/transactions`
+  - List transactions for an account (supports pagination)
+
+### Ledger (read-only)
+
+- GET `/api/v1/ledger/accounts/:accountId`
+  - Ledger entries for an account
+
+- GET `/api/v1/ledger/transactions/:transactionId`
+  - Ledger entries for a transaction
+
+### Auth
+
+- POST `/api/v1/auth/refresh`
+  - Exchange refresh token for new access token
+
+---
+
+Refer to `notes/phase2.md` for detailed design, service contracts, examples, and migration guidance.
+
   "secret": "JBSWY3DPEHPK3PXP",
   "backupCodes": ["12345678", "87654321"]
 }

@@ -31,3 +31,17 @@ export async function login(req: Request, res: Response) {
     return res.status(500).json({ success: false, error: { code: 'INTERNAL_ERROR', message: 'Login failed' } });
   }
 }
+
+export async function refresh(req: Request, res: Response) {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(400).json({ success: false, error: { code: 'BAD_REQUEST', message: 'refreshToken required' } });
+
+    const payload = await authService.verifyToken(refreshToken);
+    // Issue new access token
+    const newAccess = authService.issueAccessToken(String(payload.sub), payload.email, payload.roles || []);
+    return res.json({ success: true, data: { accessToken: newAccess } });
+  } catch (err: any) {
+    return res.status(401).json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Invalid refresh token' } });
+  }
+}

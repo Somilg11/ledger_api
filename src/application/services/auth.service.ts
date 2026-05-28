@@ -80,4 +80,9 @@ export class AuthService {
       throw new Error('INVALID_TOKEN');
     }
   }
+
+  issueAccessToken(sub: string, email?: string, roles: string[] = []) {
+    const payload = { sub, email, roles };
+    return jwt.sign(payload as any, config.jwtSecret as any, { expiresIn: config.jwtExpiresIn } as any) as string;
+  }
 }
