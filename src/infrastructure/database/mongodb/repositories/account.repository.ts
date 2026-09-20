@@ -1,31 +1,44 @@
-import mongoose from 'mongoose';
+import mongoose, { ClientSession } from 'mongoose';
 import { AccountModel, IAccount } from '../models/account.model';
-import { Account } from '../../../../domain/entities/Account.entity';
 
 export class AccountRepository {
-  async create(account: Account): Promise<IAccount> {
-    const acc = new AccountModel(account as any);
-    return await acc.save();
+  async create(data: Partial<IAccount>): Promise<IAccount> {
+    return AccountModel.create(data);
   }
 
-  async findById(id: string): Promise<IAccount | null> {
+  async findById(id: string, session?: ClientSession): Promise<IAccount | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    return await AccountModel.findById(id).exec();
+    return AccountModel.findById(id).session(session ?? null).exec();
   }
 
-  async findByUserId(userId: string): Promise<IAccount[]> {
+  async findByAccountNumber(accountNumber: string): Promise<IAccount | null> {
+    return AccountModel.findOne({ accountNumber }).exec();
+  }
+
+  async findByUserId(userId: string, limit = 50, skip = 0): Promise<IAccount[]> {
     if (!mongoose.Types.ObjectId.isValid(userId)) return [];
-    return await AccountModel.find({ userId }).exec();
+    return AccountModel.find({ userId }).sort({ createdAt: -1 }).limit(limit).skip(skip).exec();
   }
 
-  async update(id: string, data: Partial<Account>): Promise<IAccount | null> {
+  /**
+   * Only a strict allow-list of fields is updatable. Balances are never
+   * writable through this path - they move exclusively through ledger
+   * transactions.
+   */
+  async updateMutableFields(
+    id: string,
+    data: { status?: IAccount['status']; metadata?: Record<string, unknown> }
+  ): Promise<IAccount | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    return await AccountModel.findByIdAndUpdate(id, data, { new: true }).exec();
+    const update: Record<string, unknown> = {};
+    if (data.status !== undefined) update.status = data.status;
+    if (data.metadata !== undefined) update.metadata = data.metadata;
+    if (Object.keys(update).length === 0) return AccountModel.findById(id).exec();
+    return AccountModel.findByIdAndUpdate(id, { $set: update }, { new: true, runValidators: true }).exec();
   }
 
-  async delete(id: string): Promise<boolean> {
-    if (!mongoose.Types.ObjectId.isValid(id)) return false;
-    const result = await AccountModel.findByIdAndDelete(id).exec();
-    return result !== null;
+  async countByUser(userId: string): Promise<number> {
+    if (!mongoose.Types.ObjectId.isValid(userId)) return 0;
+    return AccountModel.countDocuments({ userId }).exec();
   }
 }

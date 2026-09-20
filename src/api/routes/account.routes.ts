@@ -1,27 +1,54 @@
 import { Router } from 'express';
-import { body, param } from 'express-validator';
+import { body } from 'express-validator';
 import { accountController } from '../controllers/account.controller';
 import { validationMiddleware } from '../middlewares/validation.middleware';
+import { authMiddleware } from '../middlewares/auth.middleware';
+import { idempotencyMiddleware } from '../middlewares/idempotency.middleware';
+import { asyncHandler } from '../middlewares/asyncHandler';
+import { objectIdParam, paginationQuery, metadataBody } from '../validators/common';
 
 const router = Router();
 
+// Every account route requires a verified caller; ownership is then enforced
+// inside AccountService.
+router.use(authMiddleware());
+
 router.post(
   '/',
+  idempotencyMiddleware,
   [
-    body('userId').notEmpty().withMessage('userId is required'),
-    body('accountType').notEmpty().withMessage('accountType is required'),
-    body('currency').optional().isLength({ min: 3, max: 3 }).withMessage('ISO currency code required'),
+    body('accountType').isString().isIn(['SAVINGS', 'CURRENT', 'WALLET']),
+    body('currency').optional().isString().isLength({ min: 3, max: 3 }),
+    body('userId').optional().isMongoId(),
   ],
   validationMiddleware,
-  accountController.create
+  asyncHandler(accountController.create)
 );
 
-router.get('/:id', [param('id').notEmpty()], accountController.getById);
+router.get('/', paginationQuery, validationMiddleware, asyncHandler(accountController.listMine));
 
-router.get('/user/:userId', [param('userId').notEmpty()], accountController.getByUser);
+router.get('/:id', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.getById));
 
-router.put('/:id', [param('id').notEmpty()], validationMiddleware, accountController.update);
+router.get('/:id/balance', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.getBalance));
 
-router.delete('/:id', [param('id').notEmpty()], accountController.close);
+router.get(
+  '/user/:userId',
+  [objectIdParam('userId'), ...paginationQuery],
+  validationMiddleware,
+  asyncHandler(accountController.getByUser)
+);
+
+router.patch(
+  '/:id',
+  [objectIdParam('id'), metadataBody],
+  validationMiddleware,
+  asyncHandler(accountController.updateMetadata)
+);
+
+router.post('/:id/freeze', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.freeze));
+
+router.post('/:id/unfreeze', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.unfreeze));
+
+router.delete('/:id', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.close));
 
 export default router;

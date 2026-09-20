@@ -1,0 +1,79 @@
+# Local/testing stack for the Ledger API.
+#
+#   docker compose up -d            # mongo + redis only (run the API with npm run dev)
+#   docker compose --profile api up # everything, including the API container
+#
+# MongoDB runs as a single-node replica set because multi-document
+# transactions - the thing that makes a transfer atomic - are unavailable on a
+# standalone server.
+
+services:
+  mongo:
+    image: mongo:8.0
+    container_name: ledger-mongo
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      # Initiates the replica set on first boot, then simply reports status.
+      test: >
+        mongosh --quiet --eval "
+          try { rs.status().ok }
+          catch (e) { rs.initiate({_id:'rs0',members:[{_id:0,host:'mongo:27017'}]}).ok }
+        "
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ledger-redis
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    profiles: ["api"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ledger-api
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: "3000"
+      MONGO_URI: mongodb://mongo:27017/ledger?replicaSet=rs0
+      REDIS_URL: redis://redis:6379
+      # Development-only values. Generate real ones with:
+      #   openssl rand -hex 32
+      JWT_SECRET: dev-only-access-secret-change-me-0123456789abcdef
+      JWT_REFRESH_SECRET: dev-only-refresh-secret-change-me-0123456789abcd
+      JWT_EXPIRES_IN: 15m
+      REFRESH_EXPIRES_IN: 7d
+      ALLOW_SELF_DEPOSIT: "true"
+      CORS_ORIGINS: http://localhost:5173,http://localhost:3001
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mongo-data:
+  redis-data:

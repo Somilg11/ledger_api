@@ -1,18 +1,16 @@
-export class User {
+/**
+ * Framework-free domain types. The Mongoose models extend these, so the shape
+ * of a user is defined once and the persistence layer cannot drift from it.
+ */
+export type UserRole = 'USER' | 'ADMIN';
+export type UserStatus = 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
+
+export interface User {
   id?: string;
   email: string;
-  passwordHash: string;
   name?: string;
   phone?: string;
-  roles: string[];
-  status: 'PENDING_VERIFICATION' | 'ACTIVE' | 'SUSPENDED';
-
-  constructor(params: { email: string; passwordHash: string; name?: string; phone?: string }) {
-    this.email = params.email;
-    this.passwordHash = params.passwordHash;
-    this.name = params.name;
-    this.phone = params.phone;
-    this.roles = ['USER'];
-    this.status = 'PENDING_VERIFICATION';
-  }
+  roles: UserRole[];
+  status: UserStatus;
+  emailVerified: boolean;
 }

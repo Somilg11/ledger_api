@@ -1,30 +1,37 @@
-import { Router, Request, Response } from 'express';
-import { param } from 'express-validator';
-import { LedgerService } from '../../application/services/ledger.service';
+import { Router } from 'express';
+import { ledgerController } from '../controllers/ledger.controller';
 import { validationMiddleware } from '../middlewares/validation.middleware';
+import { authMiddleware, requireAdmin } from '../middlewares/auth.middleware';
+import { asyncHandler } from '../middlewares/asyncHandler';
+import { objectIdParam, paginationQuery } from '../validators/common';
 
 const router = Router();
-const ledgerService = new LedgerService();
 
-router.get('/accounts/:accountId', [param('accountId').notEmpty()], validationMiddleware, async (req: Request, res: Response) => {
-  try {
-    const accountId = String(req.params.accountId || '');
-    const { limit = 50, skip = 0 } = req.query;
-    const entries = await ledgerService.getByAccount(accountId, Number(limit), Number(skip));
-    res.json({ success: true, data: entries });
-  } catch (error: any) {
-    res.status(400).json({ success: false, error: error.message });
-  }
-});
+// The ledger is the most sensitive read surface in the system - it is a
+// complete financial history. Nothing here is public.
+router.use(authMiddleware());
 
-router.get('/transactions/:transactionId', [param('transactionId').notEmpty()], validationMiddleware, async (req: Request, res: Response) => {
-  try {
-    const transactionId = String(req.params.transactionId || '');
-    const entries = await ledgerService.getByTransaction(transactionId);
-    res.json({ success: true, data: entries });
-  } catch (error: any) {
-    res.status(400).json({ success: false, error: error.message });
-  }
-});
+router.get(
+  '/accounts/:accountId',
+  [objectIdParam('accountId'), ...paginationQuery],
+  validationMiddleware,
+  asyncHandler(ledgerController.byAccount)
+);
+
+router.get(
+  '/accounts/:accountId/reconcile',
+  [objectIdParam('accountId')],
+  validationMiddleware,
+  asyncHandler(ledgerController.reconcileAccount)
+);
+
+router.get(
+  '/transactions/:transactionId',
+  [objectIdParam('transactionId')],
+  validationMiddleware,
+  asyncHandler(ledgerController.byTransaction)
+);
+
+router.get('/verify', requireAdmin, asyncHandler(ledgerController.verify));
 
 export default router;

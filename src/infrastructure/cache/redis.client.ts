@@ -5,17 +5,23 @@ let redisClient: Redis | null = null;
 
 export function getRedisClient(): Redis {
   if (!redisClient) {
-    const redisUrl = config.redisUrl || 'redis://localhost:6379';
-    redisClient = new Redis(redisUrl);
-    
+    redisClient = new Redis(config.redisUrl, {
+      maxRetriesPerRequest: 3,
+      enableOfflineQueue: true,
+      // Exponential-ish backoff, capped, so a Redis restart does not turn into
+      // a reconnect storm.
+      retryStrategy: (times) => Math.min(times * 200, 5_000),
+      lazyConnect: false,
+    });
+
     redisClient.on('connect', () => {
       // eslint-disable-next-line no-console
       console.log('Connected to Redis');
     });
-    
+
     redisClient.on('error', (err: Error) => {
       // eslint-disable-next-line no-console
-      console.error('Redis connection error:', err);
+      console.error('Redis error:', err.message);
     });
   }
   return redisClient;

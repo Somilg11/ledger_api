@@ -1,47 +1,69 @@
 import app from './app';
-import { connectDatabase } from './infrastructure/database/mongodb/connection';
-import { getRedisClient } from './infrastructure/cache/redis.client';
+import { config } from './shared/config/app.config';
+import { connectDatabase, disconnectDatabase } from './infrastructure/database/mongodb/connection';
+import { getRedisClient, disconnectRedis } from './infrastructure/cache/redis.client';
 
-const port = Number(process.env.PORT) || 3000;
-
-// Initialize connections
 async function initialize() {
-  try {
-    await connectDatabase();
-    getRedisClient(); // Initialize Redis connection
-    // eslint-disable-next-line no-console
-    console.log('All connections initialized');
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Initialization error:', err);
-    process.exit(1);
-  }
+  await connectDatabase();
+  await getRedisClient().ping();
+  // eslint-disable-next-line no-console
+  console.log('MongoDB and Redis connections ready');
 }
 
-initialize().then(() => {
-  const server = app.listen(port, () => {
+async function main() {
+  try {
+    await initialize();
+  } catch (err) {
     // eslint-disable-next-line no-console
-    console.log(`Ledger API listening on port ${port}`);
+    console.error('Initialization failed:', err);
+    process.exit(1);
+  }
+
+  const server = app.listen(config.port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`Ledger API listening on port ${config.port} (${config.env})`);
   });
 
-  // Graceful shutdown
-  const shutdown = (signal: string) => {
+  let shuttingDown = false;
+  const shutdown = async (signal: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     // eslint-disable-next-line no-console
-    console.log(`\nReceived ${signal}. Shutting down gracefully...`);
-    server.close(() => {
-      // eslint-disable-next-line no-console
-      console.log('HTTP server closed.');
-      process.exit(0);
-    });
+    console.log(`Received ${signal}, shutting down gracefully`);
 
-    // Force shutdown if not closed in time
-    setTimeout(() => {
+    // Stop accepting new requests first, then release the data connections so
+    // no transaction is cut off mid-flight.
+    const forced = setTimeout(() => {
       // eslint-disable-next-line no-console
-      console.error('Forcing shutdown after timeout.');
+      console.error('Forcing shutdown after timeout');
       process.exit(1);
-    }, 10_000).unref();
+    }, 10_000);
+    forced.unref();
+
+    server.close(async () => {
+      try {
+        await disconnectDatabase();
+        await disconnectRedis();
+      } finally {
+        clearTimeout(forced);
+        process.exit(0);
+      }
+    });
   };
 
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-});
+  process.on('SIGINT', () => void shutdown('SIGINT'));
+  process.on('SIGTERM', () => void shutdown('SIGTERM'));
+
+  // A crash with an unreleased Mongo session is worse than a clean restart.
+  process.on('unhandledRejection', (reason) => {
+    // eslint-disable-next-line no-console
+    console.error('Unhandled promise rejection:', reason);
+  });
+  process.on('uncaughtException', (err) => {
+    // eslint-disable-next-line no-console
+    console.error('Uncaught exception:', err);
+    void shutdown('uncaughtException');
+  });
+}
+
+void main();
