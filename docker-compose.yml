@@ -1,7 +1,8 @@
 # Local/testing stack for the Ledger API.
 #
-#   docker compose up -d            # mongo + redis only (run the API with npm run dev)
-#   docker compose --profile api up # everything, including the API container
+#   docker compose up -d             # mongo + redis only (run the API and web app locally)
+#   docker compose --profile api up  # + the API container
+#   docker compose --profile web up  # + the API and the simulation console on :8080
 #
 # MongoDB runs as a single-node replica set because multi-document
 # transactions - the thing that makes a transfer atomic - are unavailable on a
@@ -43,7 +44,7 @@ services:
       retries: 20
 
   api:
-    profiles: ["api"]
+    profiles: ["api", "web"]
     build:
       context: .
       dockerfile: Dockerfile
@@ -70,6 +71,23 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    profiles: ["web"]
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: ledger-web
+    ports:
+      - "8080:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
       interval: 10s
       timeout: 5s
       retries: 10

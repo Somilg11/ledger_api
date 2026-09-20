@@ -13,8 +13,11 @@
     "promote:admin": "ts-node scripts/promote-admin.ts",
     "infra:up": "docker compose up -d mongo redis",
     "infra:down": "docker compose down",
-    "stack:up": "docker compose --profile api up -d --build",
-    "stack:logs": "docker compose logs -f api"
+    "stack:up": "docker compose --profile web up -d --build",
+    "stack:logs": "docker compose logs -f api web",
+    "web:dev": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "seed": "node scripts/seed-demo.mjs"
   },
   "repository": {
     "type": "git",

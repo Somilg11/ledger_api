@@ -7,8 +7,11 @@ revocation).
 Every rupee that moves produces a balanced pair of journal entries, and the
 system can prove at any moment that total debits equal total credits.
 
+A React simulation console ships alongside it in [`web/`](web/README.md).
+
 - **API reference:** [`docs/api-reference.md`](docs/api-reference.md)
 - **Security model:** [`docs/security.md`](docs/security.md)
+- **Front end:** [`web/README.md`](web/README.md)
 
 ---
 
@@ -27,14 +30,21 @@ cp .env.example .env
 npm install
 npm run dev          # tsc-watch + restart
 
-# 4. test everything
+# 4. demo data + the console
+npm run seed         # alice / bob / admin with funded accounts
+npm run web:dev      # http://localhost:5173
+
+# 5. test everything
 npm run test:e2e     # 124 end-to-end checks against a running server
 ```
+
+Seeded logins are printed by `npm run seed`; all three use the password
+`Sup3rStrong!Pass`. `admin@example.com` holds the `ADMIN` role.
 
 Run the whole thing in containers instead:
 
 ```bash
-npm run stack:up     # mongo + redis + api
+npm run stack:up     # mongo + redis + api + console on http://localhost:8080
 npm run stack:logs
 ```
 
@@ -60,6 +70,8 @@ src/
 │   ├── database/mongodb/     models + repositories + connection
 │   └── cache/                Redis client, cache service, token store
 └── shared/                   config, errors, utils, DI container
+
+web/                          simulation console (React + Vite + shadcn/ui)
 ```
 
 Dependencies point inward: controllers know services, services know
@@ -176,6 +188,21 @@ replay, refresh-token reuse, NoSQL operator injection, cross-currency
 transfers, self-transfers, overdrafts, frozen/closed accounts, idempotent
 replay, 10 concurrent identical requests, 5 concurrent overdraft attempts,
 oversized bodies and the double-entry invariant.
+
+## Front end
+
+`web/` is a Vite + React + Tailwind + shadcn/ui console themed after Linear. It
+drives every route of the API: opening accounts, moving money, reading
+statements and the journal, and the admin-only reversal and verification
+surfaces. The dev server and the nginx container both proxy the API, so the
+browser stays on one origin and CORS never enters the picture.
+
+```bash
+npm run web:dev      # http://localhost:5173
+npm run web:build
+```
+
+See [`web/README.md`](web/README.md).
 
 ## Production checklist
 
