@@ -9,18 +9,44 @@
  * Prerequisites: the API, the seed data and the dev server.
  *
  *   npm run seed
- *   npm run web:dev
- *   node web/tests/ui.smoke.mjs
+ *   npm run stack:up     (console on :8080)   or   npm run web:dev  (:5173)
+ *   npm run test:ui
  *
- * Uses the locally installed Google Chrome. Override with CHROME_PATH, or set
- * BASE_URL if the dev server is not on :5173.
+ * The console port is detected automatically; override with BASE_URL. Uses the
+ * locally installed Google Chrome; override with CHROME_PATH.
  */
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const BASE = process.env.BASE_URL || 'http://localhost:5173';
+/**
+ * The console runs on :5173 under `npm run web:dev` and on :8080 when served by
+ * nginx in Docker. Probing both means the suite works either way instead of
+ * burning a 30s timeout on every step against a port nobody is listening on.
+ */
+async function resolveBaseUrl() {
+  if (process.env.BASE_URL) return process.env.BASE_URL;
+
+  for (const candidate of ['http://localhost:5173', 'http://localhost:8080']) {
+    try {
+      const res = await fetch(candidate, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) return candidate;
+    } catch {
+      // Not listening; try the next one.
+    }
+  }
+
+  console.error(
+    'No console found on :5173 or :8080.\n' +
+      '  Docker:  npm run stack:up\n' +
+      '  Local:   npm run web:dev\n' +
+      '  Or set BASE_URL to point somewhere else.'
+  );
+  process.exit(1);
+}
+
+const BASE = await resolveBaseUrl();
 // Resolved from this file, so the run works from any working directory.
 const OUT = process.env.OUT || path.join(path.dirname(fileURLToPath(import.meta.url)), 'screenshots');
 const PASSWORD = process.env.DEMO_PASSWORD || 'Sup3rStrong!Pass';
@@ -34,6 +60,9 @@ const browser = await chromium.launch(
   process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : { channel: 'chrome' }
 );
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+// A step that cannot find its target is a failure, not something worth waiting
+// half a minute for.
+page.setDefaultTimeout(10_000);
 
 page.on('console', (m) => {
   // Non-2xx fetches log here too; several of the checks below expect a 4xx.

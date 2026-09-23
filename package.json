@@ -17,7 +17,8 @@
     "stack:logs": "docker compose logs -f api web",
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
-    "seed": "node scripts/seed-demo.mjs"
+    "seed": "node scripts/seed-demo.mjs",
+    "test:ui": "npm --prefix web run test:ui"
   },
   "repository": {
     "type": "git",

@@ -10,7 +10,11 @@
 import { MongoClient } from 'mongodb';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ledger';
+// directConnection bypasses replica-set discovery. The set advertises
+// itself as `mongo:27017`, which only resolves inside the Docker network,
+// so a host-side driver must talk to the node directly.
+const MONGO_URI =
+  process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ledger?directConnection=true';
 
 let passed = 0;
 let failed = 0;

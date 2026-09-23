@@ -9,49 +9,73 @@ system can prove at any moment that total debits equal total credits.
 
 A React simulation console ships alongside it in [`web/`](web/README.md).
 
-- **API reference:** [`docs/api-reference.md`](docs/api-reference.md)
-- **Security model:** [`docs/security.md`](docs/security.md)
-- **Front end:** [`web/README.md`](web/README.md)
+| Document | What it covers |
+|---|---|
+| **[`docs/about.md`](docs/about.md)** | **Start here.** The whole project explained end to end in plain language, a guided tour of the simulation, and an interview summary. |
+| [`docs/api-reference.md`](docs/api-reference.md) | Every endpoint, with request and response bodies |
+| [`docs/security.md`](docs/security.md) | Each vulnerability found and fixed, and why |
+| [`web/README.md`](web/README.md) | The console |
+
+`docs/api.md` and `docs/flow-diagrams.md` are earlier design drafts kept for
+history — they describe endpoints that were never built. `api-reference.md` is
+the one that matches the code.
 
 ---
 
 ## Quick start
 
+Everything in containers, which is the path that needs no local setup:
+
 ```bash
-# 1. infrastructure (MongoDB single-node replica set + Redis)
-npm run infra:up
+npm run stack:up     # MongoDB + Redis + API + console
+npm run seed         # demo users, funded accounts, some traffic
+```
 
-# 2. environment
-cp .env.example .env
-# set JWT_SECRET and JWT_REFRESH_SECRET:
-#   openssl rand -hex 32
+Open **http://localhost:8080**.
 
-# 3. run
+| Service | Port |
+|---|---|
+| Console | 8080 |
+| API | 3000 |
+| MongoDB | 27017 |
+| Redis | 6379 |
+
+All three seeded logins use the password `Sup3rStrong!Pass`:
+
+| Email | Roles |
+|---|---|
+| `alice@example.com` | USER — three accounts across two currencies, funded |
+| `bob@example.com` | USER — one funded account |
+| `admin@example.com` | USER, ADMIN — also gets the Admin screen |
+
+### Developing against containerised databases
+
+```bash
+npm run infra:up     # MongoDB + Redis only
+
+cp .env.example .env # then set JWT_SECRET and JWT_REFRESH_SECRET
+                     #   openssl rand -hex 32
+
 npm install
-npm run dev          # tsc-watch + restart
-
-# 4. demo data + the console
-npm run seed         # alice / bob / admin with funded accounts
-npm run web:dev      # http://localhost:5173
-
-# 5. test everything
-npm run test:e2e     # 124 end-to-end checks against a running server
+npm run dev          # API on :3000, rebuilds and restarts on change
+npm run web:dev      # console on :5173
 ```
 
-Seeded logins are printed by `npm run seed`; all three use the password
-`Sup3rStrong!Pass`. `admin@example.com` holds the `ADMIN` role.
-
-Run the whole thing in containers instead:
+### Testing
 
 ```bash
-npm run stack:up     # mongo + redis + api + console on http://localhost:8080
-npm run stack:logs
+npm run test:e2e              # 124 API checks against a running server
+npm run test:ui  # 12 browser checks against the console
 ```
 
-> **MongoDB must be a replica set.** Transfers use multi-document transactions,
-> which standalone `mongod` does not support. `docker-compose.yml` sets up a
-> single-node replica set automatically. Pointing at your own server means
-> starting it with `--replSet rs0` and running `rs.initiate()` once.
+> **MongoDB must be a replica set, version 8.2 or newer.** Transfers use
+> multi-document transactions, which standalone `mongod` does not support, and
+> MongoDB 8.0 refuses to boot on Linux kernels 6.19+ (including the Docker
+> Desktop VM). `docker-compose.yml` handles both. Pointing at your own server
+> means starting it with `--replSet rs0` and running `rs.initiate()` once.
+
+[`docs/about.md`](docs/about.md#things-that-commonly-go-wrong) lists the errors
+people usually hit first and what each one means.
 
 ---
 
@@ -179,8 +203,11 @@ so the user logs in again to pick up the role.
 behaviour that matters:
 
 ```bash
-BASE_URL=http://localhost:3000 MONGO_URI=mongodb://127.0.0.1:27017/ledger npm run test:e2e
+npm run test:e2e
 ```
+
+Both suites default to `http://localhost:3000` and the local MongoDB; override
+with `BASE_URL` and `MONGO_URI`.
 
 It covers happy paths plus: IDOR on every read surface, money minting through
 account creation and PATCH, alg:none token forgery, access-token-as-refresh
@@ -188,6 +215,15 @@ replay, refresh-token reuse, NoSQL operator injection, cross-currency
 transfers, self-transfers, overdrafts, frozen/closed accounts, idempotent
 replay, 10 concurrent identical requests, 5 concurrent overdraft attempts,
 oversized bodies and the double-entry invariant.
+
+`web/tests/ui.smoke.mjs` drives a real browser through all six screens, checking
+what a type system cannot: that displayed money matches what the API holds, that
+an idempotent replay really moves money only once, and that a normal user never
+reaches the admin surface.
+
+```bash
+npm run test:ui
+```
 
 ## Front end
 
