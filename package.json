@@ -18,7 +18,11 @@
     "web:dev": "npm --prefix web run dev",
     "web:build": "npm --prefix web run build",
     "seed": "node scripts/seed-demo.mjs",
-    "test:ui": "npm --prefix web run test:ui"
+    "test:ui": "npm --prefix web run test:ui",
+    "stack:stop": "docker compose --profile web stop",
+    "stack:down": "docker compose --profile web down",
+    "stack:reset": "docker compose --profile web down -v",
+    "stack:ps": "docker compose --profile web ps"
   },
   "repository": {
     "type": "git",
