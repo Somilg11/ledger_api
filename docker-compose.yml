@@ -10,7 +10,9 @@
 
 services:
   mongo:
-    image: mongo:8.0
+    # 8.2 or newer is required: MongoDB 8.0 refuses to boot on Linux kernels
+    # 6.19+, which includes Docker Desktop's VM (SERVER-121912).
+    image: mongo:8.2
     container_name: ledger-mongo
     command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
     ports:
@@ -64,6 +66,11 @@ services:
       REFRESH_EXPIRES_IN: 7d
       ALLOW_SELF_DEPOSIT: "true"
       CORS_ORIGINS: http://localhost:5173,http://localhost:3001
+      # Relaxed for simulation: the console fans out several reads per screen
+      # and the end-to-end suite fires a few hundred requests in a minute.
+      # Production should keep the defaults (100/min, 10 auth attempts/5min).
+      RATE_LIMIT_MAX: "5000"
+      RATE_LIMIT_AUTH_MAX: "200"
     depends_on:
       mongo:
         condition: service_healthy
