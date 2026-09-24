@@ -653,6 +653,24 @@ export const openapiSpec = {
       },
     },
 
+    '/admin/audit-logs/{targetId}': {
+      get: {
+        tags: ['Admin'],
+        summary: 'The trail for one account or transaction',
+        parameters: [idParam('targetId', 'Account or transaction id'), ...pagination],
+        responses: {
+          '200': {
+            description: 'Entries',
+            content: {
+              'application/json': {
+                schema: ok({ type: 'array', items: { $ref: '#/components/schemas/AuditLog' } }),
+              },
+            },
+          },
+          ...responses(),
+        },
+      },
+    },
     '/admin/audit-logs': {
       get: {
         tags: ['Admin'],

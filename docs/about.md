@@ -258,13 +258,18 @@ ledger_api/
 │   ├── domain/entities/      plain type definitions, no framework
 │   ├── infrastructure/
 │   │   ├── database/mongodb/ schemas, repositories, connection
-│   │   └── cache/            Redis client, cache service, token store
-│   └── shared/               config, error types, utilities, wiring
+│   │   ├── cache/            Redis client, cache service, token store
+│   │   └── email/            the Mailer interface and its mock transport
+│   ├── docs/                 the OpenAPI document, served at /docs
+│   └── shared/               config, logger, error types, utilities, wiring
 ├── web/                      the console (React 19, Vite, Tailwind, shadcn/ui)
-├── tests/api.e2e.mjs         124 end-to-end API checks
-├── scripts/seed-demo.mjs     creates demo users, accounts and traffic
+├── tests/
+│   ├── unit/                 29 checks on the pure logic, no infrastructure
+│   ├── api.e2e.mjs           170 end-to-end API checks
+│   └── load/                 k6 load profile for the money path
+├── scripts/                  seeding, admin promotion, OpenAPI emit
 ├── docker-compose.yml        MongoDB + Redis + API + console
-└── docs/                     this file, the API reference, the security notes
+└── docs/                     this file, the API reference, security notes, openapi.json
 ```
 
 ### Why the layers
@@ -969,9 +974,10 @@ my own code, including two paths that let anyone mint unlimited money and one
 that leaked other users' session tokens. Each is documented with the attack, the
 fix and the reasoning in [`security.md`](security.md).
 
-**Testing what matters.** 124 API checks and 12 browser checks against real
-databases. The suite tests races, forged tokens and injection attempts — not
-just the happy path.
+**Testing what matters.** 29 unit checks on the pure logic, 170 API checks and
+13 browser checks, the latter two against real databases and a real browser. The
+suites test races, forged tokens and injection attempts — not just the happy
+path.
 
 ### The best story to tell
 
@@ -993,11 +999,13 @@ non-obvious and the consequence is severe.
 
 Others worth having ready:
 
-- **The `sanitizeFilter` trap.** Enabling Mongoose's injection protection
-  silently broke the conditional balance check, because it rewrites _legitimate_
-  operators too — `{ $gte: amount }` became an equality match. Security hardening
-  broke a correctness guarantee, and only the concurrency test caught it. The fix
-  was `mongoose.trusted()` to mark the query as first-party.
+- **The `sanitizeFilter` trap, which bit twice.** Enabling Mongoose's injection
+  protection silently broke the conditional balance check, because it rewrites
+  _legitimate_ operators too — `{ $gte: amount }` became an equality match.
+  Months later the identical bug appeared in the verification-token expiry check
+  (`{ $gt: new Date() }`). Security hardening broke a correctness guarantee,
+  twice, and both times only a behavioural test caught it — the types were happy.
+  The fix is `mongoose.trusted()` to mark the query as first-party.
 
 - **404 instead of 403.** Returning "forbidden" when someone reads an account
   they do not own confirms the account exists, which lets an attacker enumerate
