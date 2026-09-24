@@ -1,4 +1,4 @@
-export type TransactionStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+export type TransactionStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'REVERSED';
 export type TransactionType = 'TRANSFER' | 'DEPOSIT' | 'WITHDRAWAL';
 
 export interface Transaction {
@@ -14,5 +14,7 @@ export interface Transaction {
   reference?: string;
   metadata?: Record<string, unknown>;
   idempotencyKey?: string;
+  /** Set on a hold: after this the reservation can no longer be captured. */
+  expiresAt?: Date;
   completedAt?: Date;
 }

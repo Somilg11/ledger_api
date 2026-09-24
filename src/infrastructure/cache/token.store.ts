@@ -9,7 +9,14 @@ import { getRedisClient } from './redis.client';
  * until their natural expiry.
  */
 export class TokenStore {
-  private redis = getRedisClient();
+  /**
+   * Resolved on first use rather than at construction. Creating the client in
+   * a field initialiser opened a Redis socket merely by importing this module,
+   * which made the file unusable from anything that is not a running server.
+   */
+  private get redis() {
+    return getRedisClient();
+  }
 
   private refreshKey(userId: string, jti: string) {
     return `auth:refresh:${userId}:${jti}`;

@@ -30,10 +30,7 @@ export const referenceBody = body('reference')
   .withMessage('reference must be at most 140 characters')
   .trim();
 
-export const metadataBody = body('metadata')
-  .optional()
-  .isObject()
-  .withMessage('metadata must be an object');
+export const metadataBody = body('metadata').optional().isObject().withMessage('metadata must be an object');
 
 export const paginationQuery = [
   query('limit').optional().isInt({ min: 1, max: config.limits.maxPageSize }).toInt(),

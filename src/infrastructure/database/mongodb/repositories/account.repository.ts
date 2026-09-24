@@ -8,7 +8,9 @@ export class AccountRepository {
 
   async findById(id: string, session?: ClientSession): Promise<IAccount | null> {
     if (!mongoose.Types.ObjectId.isValid(id)) return null;
-    return AccountModel.findById(id).session(session ?? null).exec();
+    return AccountModel.findById(id)
+      .session(session ?? null)
+      .exec();
   }
 
   async findByAccountNumber(accountNumber: string): Promise<IAccount | null> {

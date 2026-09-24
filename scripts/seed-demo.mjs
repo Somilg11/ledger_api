@@ -12,8 +12,7 @@ const BASE = process.env.BASE_URL || 'http://localhost:3000';
 // directConnection bypasses replica-set discovery. The set advertises
 // itself as `mongo:27017`, which only resolves inside the Docker network,
 // so a host-side driver must talk to the node directly.
-const MONGO_URI =
-  process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ledger?directConnection=true';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ledger?directConnection=true';
 const PASSWORD = process.env.DEMO_PASSWORD || 'Sup3rStrong!Pass';
 
 async function call(method, path, { token, body } = {}) {
@@ -71,13 +70,21 @@ async function main() {
   const bob = await ensureUser('bob@example.com', 'Bob Menon');
   const admin = await ensureUser('admin@example.com', 'Bank Admin');
 
-  // ADMIN cannot be granted over HTTP by design, so it goes straight to the database.
+  // ADMIN cannot be granted over HTTP by design, so it goes straight to the
+  // database. The same connection marks the demo users verified, so the console
+  // opens clean instead of nagging - register your own user to exercise the
+  // verification flow.
   const client = new MongoClient(MONGO_URI);
   await client.connect();
-  await client
-    .db()
-    .collection('users')
-    .updateOne({ email: 'admin@example.com' }, { $addToSet: { roles: 'ADMIN' }, $inc: { tokenVersion: 1 } });
+  const users = client.db().collection('users');
+  await users.updateOne(
+    { email: 'admin@example.com' },
+    { $addToSet: { roles: 'ADMIN' }, $inc: { tokenVersion: 1 } }
+  );
+  await users.updateMany(
+    { email: { $in: ['alice@example.com', 'bob@example.com', 'admin@example.com'] } },
+    { $set: { emailVerified: true } }
+  );
   await client.close();
 
   // The role change invalidated the session above, so sign in again.
@@ -87,10 +94,26 @@ async function main() {
   console.log(`  admin roles: ${adminSession.user.roles.join(', ')}`);
   void admin;
 
-  const aliceSavings = await ensureAccount(alice, { accountType: 'SAVINGS', currency: 'INR', nickname: 'Rainy day' });
-  const aliceWallet = await ensureAccount(alice, { accountType: 'WALLET', currency: 'INR', nickname: 'Spending' });
-  const aliceUsd = await ensureAccount(alice, { accountType: 'CURRENT', currency: 'USD', nickname: 'Travel (USD)' });
-  const bobSavings = await ensureAccount(bob, { accountType: 'SAVINGS', currency: 'INR', nickname: 'Bob savings' });
+  const aliceSavings = await ensureAccount(alice, {
+    accountType: 'SAVINGS',
+    currency: 'INR',
+    nickname: 'Rainy day',
+  });
+  const aliceWallet = await ensureAccount(alice, {
+    accountType: 'WALLET',
+    currency: 'INR',
+    nickname: 'Spending',
+  });
+  const aliceUsd = await ensureAccount(alice, {
+    accountType: 'CURRENT',
+    currency: 'USD',
+    nickname: 'Travel (USD)',
+  });
+  const bobSavings = await ensureAccount(bob, {
+    accountType: 'SAVINGS',
+    currency: 'INR',
+    nickname: 'Bob savings',
+  });
 
   const fund = async (session, accountId, amount, reference) =>
     call('POST', '/transactions/deposit', {

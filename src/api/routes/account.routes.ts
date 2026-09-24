@@ -29,7 +29,12 @@ router.get('/', paginationQuery, validationMiddleware, asyncHandler(accountContr
 
 router.get('/:id', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.getById));
 
-router.get('/:id/balance', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.getBalance));
+router.get(
+  '/:id/balance',
+  [objectIdParam('id')],
+  validationMiddleware,
+  asyncHandler(accountController.getBalance)
+);
 
 router.get(
   '/user/:userId',
@@ -45,9 +50,19 @@ router.patch(
   asyncHandler(accountController.updateMetadata)
 );
 
-router.post('/:id/freeze', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.freeze));
+router.post(
+  '/:id/freeze',
+  [objectIdParam('id')],
+  validationMiddleware,
+  asyncHandler(accountController.freeze)
+);
 
-router.post('/:id/unfreeze', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.unfreeze));
+router.post(
+  '/:id/unfreeze',
+  [objectIdParam('id')],
+  validationMiddleware,
+  asyncHandler(accountController.unfreeze)
+);
 
 router.delete('/:id', [objectIdParam('id')], validationMiddleware, asyncHandler(accountController.close));
 

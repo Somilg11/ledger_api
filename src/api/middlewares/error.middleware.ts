@@ -2,7 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import mongoose from 'mongoose';
 import { AppError } from '../../shared/errors';
 import { config } from '../../shared/config/app.config';
-import { TracedRequest } from './requestId.middleware';
+import { idOf } from './requestId.middleware';
+import { logger } from '../../shared/logger';
 
 interface ErrorBody {
   success: false;
@@ -38,7 +39,7 @@ export function notFoundHandler(req: Request, res: Response) {
  * Single exit point for every failure, so responses have one shape and
  * internal details never leak to clients.
  */
-export function errorHandler(err: unknown, req: TracedRequest, res: Response, _next: NextFunction) {
+export function errorHandler(err: unknown, req: Request, res: Response, _next: NextFunction) {
   let statusCode = 500;
   let code = 'INTERNAL_ERROR';
   let message = 'An unexpected error occurred';
@@ -68,19 +69,20 @@ export function errorHandler(err: unknown, req: TracedRequest, res: Response, _n
     statusCode = err.status ?? 400;
     code = err.type === 'entity.too.large' ? 'PAYLOAD_TOO_LARGE' : 'MALFORMED_REQUEST_BODY';
     message =
-      err.type === 'entity.too.large'
-        ? 'Request body is too large'
-        : 'Request body could not be parsed';
+      err.type === 'entity.too.large' ? 'Request body is too large' : 'Request body could not be parsed';
   }
 
+  const requestId = idOf(req);
+
+  // Only unexpected failures are worth an error line. A 400 is the API working
+  // as designed and would otherwise drown the signal.
   if (statusCode >= 500) {
-    // eslint-disable-next-line no-console
-    console.error(`[${req.id ?? '-'}] ${req.method} ${req.originalUrl}`, err);
+    logger.error({ err, requestId, method: req.method, url: req.originalUrl }, 'request failed');
   }
 
   const body: ErrorBody = {
     success: false,
-    error: { code, message, requestId: req.id },
+    error: { code, message, requestId },
   };
 
   if (details !== undefined) body.error.details = details;

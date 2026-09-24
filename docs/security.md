@@ -49,7 +49,7 @@ consulted during a transfer.
 → Both sides are checked before any write; a frozen or closed account is a 409.
 
 **Cross-currency value creation.** The transfer used the currency from the
-*request body* and never compared the two accounts, so 100 paise could be
+_request body_ and never compared the two accounts, so 100 paise could be
 credited as 100 cents.
 → The currency comes from the source account and both accounts must match.
 
@@ -81,14 +81,14 @@ stack traces only outside production.
 request would have returned 429.
 → Redis errors are distinguished from limit rejections and fail open, with an
 in-process insurance limiter. Credential endpoints have their own much tighter
-budget keyed by IP *and* email, so one attacker cannot lock out everyone behind
+budget keyed by IP _and_ email, so one attacker cannot lock out everyone behind
 a shared IP.
 
 **No brute-force protection.** Unlimited login attempts.
 → Five failures lock the account for 15 minutes, on top of the auth rate limit.
 
 **Suspended users could log in.** `status` was never checked.
-→ Checked at login *and* on every authenticated request.
+→ Checked at login _and_ on every authenticated request.
 
 **Duplicate accounts by email case.** `alice@x.com` and `Alice@x.com` were two
 users.
@@ -105,36 +105,59 @@ collide.
 
 ## Controls in place
 
-| Control | Implementation |
-|---|---|
-| Authentication | JWT access tokens, 15 min, `jti` + `typ` + `ver` claims |
-| Session revocation | Redis deny-list (access) + one-time allow-list (refresh) |
-| Authorisation | Ownership in the service layer; `ADMIN` role for privileged routes |
-| Password storage | bcrypt, 12 rounds, `select: false` on the field |
-| Password policy | ≥ 10 chars, mixed case, digit, symbol |
-| User enumeration | Identical error + constant-time-ish bcrypt on unknown users |
-| Injection | `isMongoId`/`isEmail`/type checks at the edge + Mongoose `sanitizeFilter` |
-| Transport of secrets | Hashes and token versions stripped from every response |
-| Headers | `helmet`, `x-powered-by` disabled, CORS allow-list (deny by default) |
-| Payload size | 100 kB body cap → 413 |
-| Rate limiting | Per IP, per IP+email, per user |
-| Idempotency | Redis lock + payload fingerprint + unique DB index |
-| Audit | Append-only ledger, request id on every log line and error |
-| Integrity | Per-account and system-wide reconciliation endpoints |
+| Control              | Implementation                                                            |
+| -------------------- | ------------------------------------------------------------------------- |
+| Authentication       | JWT access tokens, 15 min, `jti` + `typ` + `ver` claims                   |
+| Session revocation   | Redis deny-list (access) + one-time allow-list (refresh)                  |
+| Authorisation        | Ownership in the service layer; `ADMIN` role for privileged routes        |
+| Password storage     | bcrypt, 12 rounds, `select: false` on the field                           |
+| Password policy      | ≥ 10 chars, mixed case, digit, symbol                                     |
+| User enumeration     | Identical error + constant-time-ish bcrypt on unknown users               |
+| Injection            | `isMongoId`/`isEmail`/type checks at the edge + Mongoose `sanitizeFilter` |
+| Transport of secrets | Hashes and token versions stripped from every response                    |
+| Headers              | `helmet`, `x-powered-by` disabled, CORS allow-list (deny by default)      |
+| Payload size         | 100 kB body cap → 413                                                     |
+| Rate limiting        | Per IP, per IP+email, per user                                            |
+| Idempotency          | Redis lock + payload fingerprint + unique DB index                        |
+| Audit                | Append-only ledger, request id on every log line and error                |
+| Integrity            | Per-account and system-wide reconciliation endpoints                      |
+
+## Added since the audit
+
+| Control                  | Implementation                                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Email verification       | Single-use token stored only as a SHA-256 hash, 24h TTL index, atomic claim, one identical error for expired/spent/unknown so tokens cannot be probed |
+| No enumeration on resend | `/auth/resend-verification` returns the same 200 whether or not the address exists                                                                    |
+| Mock-mail containment    | The verification link is returned in the response **only** while mail is mocked, and mocking is unavailable in production — not merely defaulted off  |
+| Audit trail              | Reversals and staff-initiated freeze/unfreeze/close are written to an append-only collection with actor, reason and request id                        |
+| Log redaction            | `authorization`, `password`, `*.token`, `set-cookie` and friends are censored at the logger, so a new log line cannot leak one by omission            |
+| Holds                    | Reservations are race-safe by the same conditional-update construction as debits, and write nothing to the journal                                    |
+
+### One trap worth repeating
+
+Mongoose's `sanitizeFilter` — the defence against injected query operators —
+rewrites **legitimate** operators too. It broke the conditional balance check
+once (`{ $gte: amount }` became an equality match) and then broke the
+verification-token expiry check the same way (`{ $gt: new Date() }`). Both are
+now wrapped in `mongoose.trusted()`. In both cases the failure was silent at
+the type level and caught only by a test that exercised the behaviour.
 
 ## Known gaps
 
 Deliberately out of scope for this pass — worth doing before real money:
 
-- **Email verification and password reset** are not implemented (`emailVerified`
-  exists but nothing sets it).
+- **Password reset** is not implemented. The token model already supports the
+  purpose and the mailer exists, so it is mostly wiring.
+- **Real mail delivery** — everything up to the transport is implemented; the
+  transport logs instead of sending.
 - **MFA** is not implemented.
 - **No webhook or external settlement integration** — deposits are simulated
   against the system contra account.
-- **No hold/authorisation flow.** `availableBalance` tracks `balance` exactly;
-  there is no pending-hold mechanism yet.
+- **Expired holds are not swept.** An expired hold cannot be captured, but
+  nothing releases it automatically.
+- **Partial capture** is not supported — a hold settles in full or not at all.
 - **Reconciliation is on demand**, not a scheduled job with alerting.
-- **No audit log of administrative actions** (who reversed what, who unfroze
-  which account) beyond the transaction metadata.
+- **No continuous integration.** The suites exist and pass; nothing runs them
+  on a push yet.
 - **Redis is a hard dependency for session revocation.** Flushing Redis logs
   everyone out; losing it silently would stop deny-listing from working.

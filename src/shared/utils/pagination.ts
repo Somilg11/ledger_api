@@ -13,9 +13,10 @@ export function parsePagination(query: Record<string, unknown>): Pagination {
   const rawLimit = Number(query.limit);
   const rawSkip = Number(query.skip);
 
-  const limit = Number.isFinite(rawLimit) && rawLimit > 0
-    ? Math.min(Math.floor(rawLimit), config.limits.maxPageSize)
-    : 50;
+  const limit =
+    Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(Math.floor(rawLimit), config.limits.maxPageSize)
+      : 50;
 
   const skip = Number.isFinite(rawSkip) && rawSkip > 0 ? Math.floor(rawSkip) : 0;
 

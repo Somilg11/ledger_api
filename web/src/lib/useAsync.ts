@@ -19,23 +19,27 @@ interface AsyncState<T> {
 
 /** Loads data on mount and whenever `deps` change, with a manual reload hook. */
 export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): AsyncState<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<{ data: T | null; error: string | null; loading: boolean }>({
+    data: null,
+    error: null,
+    loading: true,
+  });
 
-  // Keeps the latest loader without making it part of the dependency list.
+  // Holds the latest loader without making it part of the dependency list.
+  // Written in an effect rather than during render: mutating a ref while
+  // rendering is unsafe under concurrent rendering, where a render may be
+  // discarded.
   const loaderRef = useRef(loader);
-  loaderRef.current = loader;
+  useEffect(() => {
+    loaderRef.current = loader;
+  });
 
   const run = useCallback(async () => {
-    setLoading(true);
-    setError(null);
     try {
-      setData(await loaderRef.current());
+      const data = await loaderRef.current();
+      setState({ data, error: null, loading: false });
     } catch (err) {
-      setError(describeError(err));
-    } finally {
-      setLoading(false);
+      setState({ data: null, error: describeError(err), loading: false });
     }
   }, []);
 
@@ -44,5 +48,12 @@ export function useAsync<T>(loader: () => Promise<T>, deps: unknown[] = []): Asy
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
 
-  return { data, error, loading, reload: run };
+  const reload = useCallback(async () => {
+    // Only a manual reload flips the spinner back on; the initial load starts
+    // in the loading state already.
+    setState((current) => ({ ...current, loading: true }));
+    await run();
+  }, [run]);
+
+  return { ...state, reload };
 }

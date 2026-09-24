@@ -1,8 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Landmark } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/useAsync';
+import { toastVerificationLink } from '@/components/verification';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,10 +27,19 @@ export function Login() {
     setPending(true);
     setError(null);
     try {
-      if (mode === 'login') await login(email, password);
-      else await register({ email, password, name: name || undefined });
+      if (mode === 'login') {
+        await login(email, password);
+        toast.success('Signed in');
+      } else {
+        const result = await register({ email, password, name: name || undefined });
+        toast.success('Account created');
+        // The API hands back the link only while mail is mocked.
+        toastVerificationLink(result.verification, 'Verify your email address');
+      }
     } catch (err) {
-      setError(describeError(err));
+      const message = describeError(err);
+      setError(message);
+      toast.error(message);
     } finally {
       setPending(false);
     }
@@ -106,6 +117,12 @@ export function Login() {
 
         <p className="text-muted-foreground mt-6 text-center text-[11px]">
           Five failed sign-ins lock the account for 15 minutes.
+          <br />
+          Already have a verification link?{' '}
+          <Link to="/verify-email" className="hover:text-foreground underline underline-offset-2">
+            Open it here
+          </Link>
+          .
         </p>
       </div>
     </div>

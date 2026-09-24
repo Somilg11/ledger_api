@@ -3,7 +3,14 @@ import { MoreHorizontal, Plus, Snowflake, Wallet, XCircle } from 'lucide-react';
 import { api, type Account, type AccountType, type BalanceReport } from '@/lib/api';
 import { describeError, useAsync } from '@/lib/useAsync';
 import { CURRENCIES } from '@/lib/money';
-import { EmptyState, InlineError, Money, PageHeader, StatusBadge, SubmitButton } from '@/components/primitives';
+import {
+  EmptyState,
+  InlineError,
+  Money,
+  PageHeader,
+  StatusBadge,
+  SubmitButton,
+} from '@/components/primitives';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';

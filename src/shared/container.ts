@@ -5,6 +5,7 @@ import { AuthService } from '../application/services/auth.service';
 import { AccountService } from '../application/services/account.service';
 import { LedgerService } from '../application/services/ledger.service';
 import { TransactionService } from '../application/services/transaction.service';
+import { AuditService } from '../application/services/audit.service';
 
 /**
  * Single place where concrete implementations are wired together, so a test
@@ -14,7 +15,8 @@ const userRepository = new UserRepository();
 const accountRepository = new AccountRepository();
 const ledgerRepository = new LedgerRepository();
 
+export const auditService = new AuditService();
 export const authService = new AuthService(userRepository);
 export const ledgerService = new LedgerService(ledgerRepository);
-export const accountService = new AccountService(accountRepository, ledgerRepository);
-export const transactionService = new TransactionService(ledgerService, accountService);
+export const accountService = new AccountService(accountRepository, ledgerRepository, auditService);
+export const transactionService = new TransactionService(ledgerService, accountService, auditService);

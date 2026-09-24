@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { Layout } from '@/components/Layout';
 import { Login } from '@/routes/Login';
+import { VerifyEmail } from '@/routes/VerifyEmail';
 import { Dashboard } from '@/routes/Dashboard';
 import { Accounts } from '@/routes/Accounts';
 import { Transfer } from '@/routes/Transfer';
@@ -40,6 +41,9 @@ export default function App() {
         <TooltipProvider delayDuration={200}>
           <Routes>
             <Route path="/login" element={<Login />} />
+            {/* Public: the link is opened from a mail client, where the
+                recipient is usually not signed in. */}
+            <Route path="/verify-email" element={<VerifyEmail />} />
             <Route element={<RequireAuth />}>
               <Route element={<Layout />}>
                 <Route index element={<Dashboard />} />

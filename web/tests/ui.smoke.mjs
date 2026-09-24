@@ -223,6 +223,57 @@ await step('sign in as admin and verify the books', async () => {
   await shot(page, '09-admin');
 });
 
+await step('register, then verify the email from the mock message', async () => {
+  const email = `smoke.${Date.now()}@example.com`;
+
+  // The previous step left an admin session open, and /login redirects while
+  // one exists, so clear it before registering.
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.locator('aside button').first().click();
+  await page.waitForTimeout(400);
+  await page.getByRole('menuitem', { name: 'Log out', exact: true }).click();
+  await page.getByRole('heading', { name: 'Ledger Console' }).waitFor({ timeout: 8000 });
+
+  await page.getByRole('tab', { name: 'Create account' }).click();
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(PASSWORD);
+  await page.getByRole('button', { name: 'Create account' }).click();
+
+  // Mail is mocked, so the link the user would have received is in a toast.
+  const linkNode = page.locator('[data-sonner-toast] code').first();
+  await linkNode.waitFor({ timeout: 10_000 });
+  const link = (await linkNode.innerText()).trim();
+  if (!/\/verify-email\?token=/.test(link)) throw new Error(`toast did not contain a link: ${link}`);
+
+  // A fresh account is unverified until the link is used.
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
+  await page.getByText('Your email address is not verified').waitFor({ timeout: 8000 });
+  await shot(page, '13-unverified-banner');
+
+  // Opening the link must not verify on its own - a scanner that pre-fetches
+  // URLs would otherwise confirm addresses for the recipient.
+  await page.goto(link, { waitUntil: 'networkidle' });
+  await page.getByRole('heading', { name: 'Confirm your email address' }).waitFor({ timeout: 8000 });
+  await shot(page, '14-mock-email');
+
+  await page.getByRole('button', { name: 'Verify email address' }).click();
+  await page.getByRole('heading', { name: 'Email verified' }).waitFor({ timeout: 8000 });
+  await shot(page, '15-verified');
+
+  // Single use: the same link cannot verify twice.
+  await page.goto(link, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Verify email address' }).click();
+  await page.getByText(/invalid or has expired/).waitFor({ timeout: 8000 });
+
+  // And the banner is gone for that user.
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1500);
+  if ((await page.getByText('Your email address is not verified').count()) !== 0) {
+    throw new Error('the unverified banner is still showing after verification');
+  }
+});
+
 await step('mobile layout', async () => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });

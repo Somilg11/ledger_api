@@ -1,7 +1,13 @@
-import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { RateLimiterRedis, RateLimiterRes, RateLimiterMemory, RateLimiterAbstract } from 'rate-limiter-flexible';
+import { Request, RequestHandler } from 'express';
+import {
+  RateLimiterRedis,
+  RateLimiterRes,
+  RateLimiterMemory,
+  RateLimiterAbstract,
+} from 'rate-limiter-flexible';
 import { getRedisClient } from '../../infrastructure/cache/redis.client';
 import { config } from '../../shared/config/app.config';
+import { logger } from '../../shared/logger';
 import { AuthRequest } from './auth.middleware';
 
 function build(keyPrefix: string, points: number, duration: number): RateLimiterAbstract {
@@ -34,8 +40,7 @@ function makeHandler(limiter: RateLimiterAbstract, keyOf: (req: Request) => stri
       .catch((rejection: RateLimiterRes | Error) => {
         if (rejection instanceof Error) {
           // A limiter failure is an infrastructure problem, not a client one.
-          // eslint-disable-next-line no-console
-          console.error('Rate limiter unavailable, allowing request:', rejection.message);
+          logger.error({ err: rejection.message }, 'rate limiter unavailable, allowing request');
           return next();
         }
         const retryAfter = Math.ceil(rejection.msBeforeNext / 1000) || 1;

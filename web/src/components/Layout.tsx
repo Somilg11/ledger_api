@@ -9,6 +9,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -87,7 +88,10 @@ export function Layout() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => {
-                void logout().then(() => navigate('/login'));
+                void logout().then(() => {
+                  toast.success('Signed out');
+                  navigate('/login');
+                });
               }}
             >
               <LogOut className="size-3.5" />
@@ -95,7 +99,10 @@ export function Layout() {
             </DropdownMenuItem>
             <DropdownMenuItem
               onSelect={() => {
-                void logout(true).then(() => navigate('/login'));
+                void logout(true).then(() => {
+                  toast.success('Signed out of every device');
+                  navigate('/login');
+                });
               }}
             >
               <LogOut className="size-3.5" />

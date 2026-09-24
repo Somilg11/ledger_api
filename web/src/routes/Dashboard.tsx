@@ -6,6 +6,7 @@ import { useAsync } from '@/lib/useAsync';
 import { formatMinor } from '@/lib/money';
 import { relativeTime } from '@/lib/format';
 import { EmptyState, IdChip, Money, PageHeader, StatusBadge } from '@/components/primitives';
+import { UnverifiedBanner, VerifiedBadge } from '@/components/verification';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,7 +24,9 @@ export function Dashboard() {
     const live = accounts.filter((a) => a.status !== 'CLOSED');
 
     const balances = await Promise.all(live.map((a) => api.accounts.balance(a._id)));
-    const perAccount = await Promise.all(live.slice(0, 4).map((a) => api.transactions.listByAccount(a._id, 10)));
+    const perAccount = await Promise.all(
+      live.slice(0, 4).map((a) => api.transactions.listByAccount(a._id, 10))
+    );
 
     // One merged, de-duplicated activity feed across the user's accounts.
     const seen = new Set<string>();
@@ -53,11 +56,16 @@ export function Dashboard() {
         title="Dashboard"
         description="Balances, reconciliation status and recent movement across your accounts."
         actions={
-          <Button asChild size="sm">
-            <Link to="/transfer">Move money</Link>
-          </Button>
+          <>
+            <VerifiedBadge />
+            <Button asChild size="sm">
+              <Link to="/transfer">Move money</Link>
+            </Button>
+          </>
         }
       />
+
+      <UnverifiedBanner />
 
       {error && (
         <Alert variant="destructive" className="mb-5">
@@ -108,7 +116,9 @@ export function Dashboard() {
 
             <Card className="surface-edge gap-0 py-4">
               <CardHeader className="px-4 pb-2">
-                <CardTitle className="text-muted-foreground text-[12px] font-normal">Reconciliation</CardTitle>
+                <CardTitle className="text-muted-foreground text-[12px] font-normal">
+                  Reconciliation
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex items-center gap-2 px-4">
                 {drifted.length === 0 ? (

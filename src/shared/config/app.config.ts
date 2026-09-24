@@ -19,7 +19,8 @@ function requiredSecret(name: string): string {
     }
     // Development fallback: random per boot, so nothing can be signed offline.
     const generated = crypto.randomBytes(48).toString('hex');
-    // eslint-disable-next-line no-console
+    // The logger reads this config, so it cannot exist yet. This is the one
+    // place in the codebase that legitimately writes to the console.
     console.warn(`[config] ${name} missing or too short - generated an ephemeral development value`);
     return generated;
   }
@@ -53,11 +54,40 @@ export const config = {
 
   bcryptRounds: intEnv('BCRYPT_ROUNDS', 12),
 
+  /** Serve the interactive OpenAPI reference at /docs. */
+  enableApiDocs: process.env.ENABLE_API_DOCS !== 'false',
+
+  /**
+   * Mail is mocked: nothing is delivered, and verification links are handed
+   * back in the API response so the simulation console can show them.
+   *
+   * This is a development affordance and a serious hole if it ever ships —
+   * anyone who can call /auth/register for an address would receive that
+   * address's verification link. Production therefore cannot turn it on, no
+   * matter what the environment says.
+   */
+  mockEmail: !isProduction && process.env.MOCK_EMAIL !== 'false',
+
+  /** Base URL the console is served from, used to build action links. */
+  appUrl: process.env.APP_URL || 'http://localhost:8080',
+
+  emailVerification: {
+    tokenTtlSeconds: intEnv('EMAIL_VERIFICATION_TTL_SECONDS', 24 * 60 * 60),
+    /**
+     * When true, an unverified user cannot move money. Off by default so the
+     * simulation is usable immediately; a real deployment would turn it on.
+     */
+    required: process.env.REQUIRE_EMAIL_VERIFICATION === 'true',
+  },
+
   // Behind a load balancer set TRUST_PROXY to the number of proxy hops so
   // req.ip is the real client and cannot be spoofed via X-Forwarded-For.
   trustProxy: process.env.TRUST_PROXY ? Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY : false,
 
-  corsOrigins: (process.env.CORS_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean),
+  corsOrigins: (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
 
   rateLimit: {
     windowSeconds: intEnv('RATE_LIMIT_WINDOW_SECONDS', 60),

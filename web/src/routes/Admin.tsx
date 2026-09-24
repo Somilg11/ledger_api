@@ -1,9 +1,17 @@
 import { useState } from 'react';
-import { RotateCcw, ShieldAlert, ShieldCheck, Snowflake } from 'lucide-react';
+import { RotateCcw, ScrollText, ShieldAlert, ShieldCheck, Snowflake } from 'lucide-react';
 import { api } from '@/lib/api';
 import { describeError, useAsync } from '@/lib/useAsync';
 import { formatMinor } from '@/lib/money';
-import { Field, IdChip, InlineError, Money, PageHeader, StatusBadge, SubmitButton } from '@/components/primitives';
+import {
+  Field,
+  IdChip,
+  InlineError,
+  Money,
+  PageHeader,
+  StatusBadge,
+  SubmitButton,
+} from '@/components/primitives';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,6 +31,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import type { Transaction } from '@/lib/api';
+import { absoluteTime } from '@/lib/format';
+import { EmptyState } from '@/components/primitives';
 
 export function Admin() {
   return (
@@ -36,6 +46,7 @@ export function Admin() {
         <VerifyCard />
         <ReverseCard />
         <UnfreezeCard />
+        <AuditCard />
       </div>
     </div>
   );
@@ -78,7 +89,9 @@ function VerifyCard() {
               )}
               <span
                 className={
-                  data!.balanced ? 'text-[13px] font-medium text-[var(--credit)]' : 'text-destructive text-[13px] font-medium'
+                  data!.balanced
+                    ? 'text-[13px] font-medium text-[var(--credit)]'
+                    : 'text-destructive text-[13px] font-medium'
                 }
               >
                 {data!.balanced ? 'Books balance' : 'Books do not balance'}
@@ -96,6 +109,63 @@ function VerifyCard() {
               </div>
             </div>
           </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Who did what, with the request id that produced it. */
+function AuditCard() {
+  const { data, error, loading, reload } = useAsync(() => api.admin.auditLogs(25), []);
+
+  return (
+    <Card className="surface-edge gap-0 py-0 lg:col-span-2">
+      <CardHeader className="border-border border-b px-4 py-3">
+        <CardTitle className="text-[13px] font-medium">Audit log</CardTitle>
+        <CardDescription className="text-[12px]">
+          Privileged actions only, append-only. The API refuses updates and deletes on this collection.
+        </CardDescription>
+        <CardAction>
+          <Button variant="outline" size="sm" onClick={() => void reload()} disabled={loading}>
+            Refresh
+          </Button>
+        </CardAction>
+      </CardHeader>
+      <CardContent className="p-0">
+        {loading ? (
+          <div className="space-y-2 p-4">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-9" />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="p-4">
+            <InlineError message={error} />
+          </div>
+        ) : (data ?? []).length === 0 ? (
+          <EmptyState
+            icon={ScrollText}
+            title="Nothing recorded yet"
+            description="Reverse a transaction or unfreeze someone else's account to see an entry appear."
+          />
+        ) : (
+          <ul className="divide-border divide-y">
+            {data!.map((entry) => (
+              <li key={entry._id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-2.5">
+                <StatusBadge status={entry.action.replace(/_/g, ' ')} className="font-mono" />
+                <span className="text-muted-foreground text-[12px]">{entry.actorEmail ?? entry.actorId}</span>
+                <IdChip
+                  id={entry.targetId}
+                  label={`${entry.targetType.toLowerCase()} …${entry.targetId.slice(-6)}`}
+                />
+                {entry.reason && <span className="text-muted-foreground text-[12px]">“{entry.reason}”</span>}
+                <span className="text-muted-foreground ml-auto text-[11px]">
+                  {absoluteTime(entry.createdAt)}
+                </span>
+              </li>
+            ))}
+          </ul>
         )}
       </CardContent>
     </Card>
@@ -206,15 +276,17 @@ function ReverseCard() {
                     disabled={pending || found.status !== 'COMPLETED'}
                   >
                     <RotateCcw className="size-3.5" />
-                    {found.status === 'COMPLETED' ? 'Reverse transaction' : `Cannot reverse a ${found.status} transaction`}
+                    {found.status === 'COMPLETED'
+                      ? 'Reverse transaction'
+                      : `Cannot reverse a ${found.status} transaction`}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Reverse this transaction?</AlertDialogTitle>
                     <AlertDialogDescription className="text-[12px]">
-                      {formatMinor(found.amount, found.currency)} moves back to the originating account and the
-                      original is marked REVERSED. A transaction can only be reversed once.
+                      {formatMinor(found.amount, found.currency)} moves back to the originating account and
+                      the original is marked REVERSED. A transaction can only be reversed once.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -274,7 +346,12 @@ function UnfreezeCard() {
 
         <InlineError message={error} />
 
-        <SubmitButton pending={pending} onClick={() => void unfreeze()} disabled={!id.trim()} className="w-full">
+        <SubmitButton
+          pending={pending}
+          onClick={() => void unfreeze()}
+          disabled={!id.trim()}
+          className="w-full"
+        >
           <Snowflake className="size-3.5" />
           Unfreeze
         </SubmitButton>

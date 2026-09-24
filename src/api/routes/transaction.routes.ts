@@ -6,7 +6,14 @@ import { authMiddleware, requireAdmin } from '../middlewares/auth.middleware';
 import { idempotencyMiddleware } from '../middlewares/idempotency.middleware';
 import { transactionRateLimiter } from '../middlewares/redisRateLimit.middleware';
 import { asyncHandler } from '../middlewares/asyncHandler';
-import { objectIdParam, objectIdBody, amountBody, referenceBody, metadataBody, paginationQuery } from '../validators/common';
+import {
+  objectIdParam,
+  objectIdBody,
+  amountBody,
+  referenceBody,
+  metadataBody,
+  paginationQuery,
+} from '../validators/common';
 
 const router = Router();
 
@@ -38,6 +45,36 @@ router.post(
   [objectIdBody('accountId'), amountBody, referenceBody, metadataBody],
   validationMiddleware,
   asyncHandler(transactionController.withdraw)
+);
+
+// Holds: reserve now, settle or release later. See docs/about.md.
+router.post(
+  '/authorize',
+  idempotencyMiddleware,
+  [
+    objectIdBody('fromAccount'),
+    objectIdBody('toAccount'),
+    amountBody,
+    body('expiresInSeconds').optional().isInt({ min: 1, max: 2_592_000 }).toInt(),
+    referenceBody,
+    metadataBody,
+  ],
+  validationMiddleware,
+  asyncHandler(transactionController.authorize)
+);
+
+router.post(
+  '/:id/capture',
+  [objectIdParam('id')],
+  validationMiddleware,
+  asyncHandler(transactionController.capture)
+);
+
+router.post(
+  '/:id/void',
+  [objectIdParam('id'), body('reason').optional().isString().isLength({ max: 280 })],
+  validationMiddleware,
+  asyncHandler(transactionController.voidHold)
 );
 
 router.get('/:id', [objectIdParam('id')], validationMiddleware, asyncHandler(transactionController.getById));

@@ -17,7 +17,9 @@ export function assertValidAmount(amount: unknown): number {
     throw new ValidationError('amount must be greater than zero');
   }
   if (amount > config.limits.maxTransferMinorUnits) {
-    throw new ValidationError(`amount exceeds the maximum of ${config.limits.maxTransferMinorUnits} minor units`);
+    throw new ValidationError(
+      `amount exceeds the maximum of ${config.limits.maxTransferMinorUnits} minor units`
+    );
   }
   if (!Number.isSafeInteger(amount)) {
     throw new ValidationError('amount is not a safe integer');
@@ -34,9 +36,4 @@ export function assertSupportedCurrency(currency: unknown): string {
     throw new ValidationError(`currency must be one of: ${config.supportedCurrencies.join(', ')}`);
   }
   return normalized;
-}
-
-/** Formats minor units for display only. Never feed this back into arithmetic. */
-export function formatMinorUnits(amount: number, currency = 'INR'): string {
-  return `${(amount / 100).toFixed(2)} ${currency}`;
 }

@@ -2,39 +2,27 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { UserRepository } from '../../infrastructure/database/mongodb/repositories/user.repository';
+import { VerificationService } from './verification.service';
 import { tokenStore } from '../../infrastructure/cache/token.store';
 import { config } from '../../shared/config/app.config';
-import { ConflictError, UnauthorizedError, ForbiddenError, ValidationError } from '../../shared/errors';
+import { ConflictError, UnauthorizedError, ForbiddenError } from '../../shared/errors';
+import { assertStrongPassword } from '../../shared/utils/password';
+
+// Re-exported so existing imports keep working.
+export { assertStrongPassword };
 
 export interface TokenPayload {
   sub: string;
   email?: string;
   roles: string[];
+  /** Not a token claim - filled in from the database on verification. */
+  emailVerified?: boolean;
   /** User tokenVersion at issue time - lets a password change kill live tokens. */
   ver: number;
   typ: 'access' | 'refresh';
   jti: string;
   iat?: number;
   exp?: number;
-}
-
-/** A password that survives an offline crack attempt for more than a weekend. */
-const PASSWORD_RULES = [
-  { test: (p: string) => p.length >= 10, message: 'at least 10 characters' },
-  { test: (p: string) => /[a-z]/.test(p), message: 'a lowercase letter' },
-  { test: (p: string) => /[A-Z]/.test(p), message: 'an uppercase letter' },
-  { test: (p: string) => /[0-9]/.test(p), message: 'a digit' },
-  { test: (p: string) => /[^A-Za-z0-9]/.test(p), message: 'a symbol' },
-];
-
-export function assertStrongPassword(password: unknown): string {
-  if (typeof password !== 'string') throw new ValidationError('password must be a string');
-  if (password.length > 200) throw new ValidationError('password must be at most 200 characters');
-  const missing = PASSWORD_RULES.filter((r) => !r.test(password)).map((r) => r.message);
-  if (missing.length > 0) {
-    throw new ValidationError(`password must contain ${missing.join(', ')}`);
-  }
-  return password;
 }
 
 function ttlSeconds(expiresIn: string): number {
@@ -47,7 +35,10 @@ function ttlSeconds(expiresIn: string): number {
 }
 
 export class AuthService {
-  constructor(private userRepository: UserRepository) {}
+  constructor(
+    private userRepository: UserRepository,
+    private verification: VerificationService = new VerificationService()
+  ) {}
 
   private sign(payload: Omit<TokenPayload, 'iat' | 'exp'>, secret: string, expiresIn: string): string {
     const options = {
@@ -117,7 +108,20 @@ export class AuthService {
         emailVerified: false,
       });
 
-      return { userId: String(user._id), email: user.email, status: user.status };
+      const issued = await this.verification.issueEmailVerification(user);
+
+      return {
+        userId: String(user._id),
+        email: user.email,
+        status: user.status,
+        emailVerified: user.emailVerified,
+        // The link is returned only while mail is mocked. Handing a
+        // verification link to whoever called /auth/register would otherwise
+        // let anyone verify an address they do not control.
+        verification: config.mockEmail
+          ? { link: issued.link, expiresAt: issued.expiresAt, delivery: 'mock' as const }
+          : undefined,
+      };
     } catch (err: unknown) {
       // Unique index is the real guard against the check-then-insert race.
       if ((err as { code?: number }).code === 11000) {
@@ -183,8 +187,10 @@ export class AuthService {
     if (user.tokenVersion !== payload.ver) throw new UnauthorizedError('Token has been invalidated');
 
     // Roles come from the database, not the token, so a role revoked a minute
-    // ago cannot be used for the remaining life of an issued token.
-    return { ...payload, roles: user.roles, email: user.email };
+    // ago cannot be used for the remaining life of an issued token. The same
+    // applies to verification state - a token minted before verification must
+    // not keep reporting the user as unverified.
+    return { ...payload, roles: user.roles, email: user.email, emailVerified: user.emailVerified };
   }
 
   /**
@@ -257,6 +263,26 @@ export class AuthService {
 
     await tokenStore.revokeAllRefreshTokens(userId);
     return { changed: true };
+  }
+
+  async verifyEmail(token: unknown) {
+    return this.verification.verifyEmail(token);
+  }
+
+  /**
+   * Always reports success. A different response for an unknown address would
+   * turn this into an account-existence oracle.
+   */
+  async resendEmailVerification(email: unknown) {
+    const issued = await this.verification.resendEmailVerification(email);
+
+    return {
+      sent: true,
+      verification:
+        config.mockEmail && issued
+          ? { link: issued.link, expiresAt: issued.expiresAt, delivery: 'mock' as const }
+          : undefined,
+    };
   }
 
   async getProfile(userId: string) {

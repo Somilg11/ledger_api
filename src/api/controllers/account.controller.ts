@@ -43,7 +43,11 @@ export class AccountController {
 
   async updateMetadata(req: AuthRequest, res: Response) {
     const actor = actorOf(req);
-    const updated = await accountService.updateMetadata(actor, String(req.params.id), req.body.metadata ?? {});
+    const updated = await accountService.updateMetadata(
+      actor,
+      String(req.params.id),
+      req.body.metadata ?? {}
+    );
     res.json({ success: true, data: updated });
   }
 

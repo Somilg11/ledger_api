@@ -25,17 +25,25 @@ same thing with nginx.
 
 ## Screens
 
-| Route | What it does |
-|---|---|
-| `/login` | Sign in or register. Surfaces the API's password policy. |
-| `/` | Balances per currency, account list, merged activity feed, reconciliation status. |
-| `/accounts` | Open, rename, freeze and close accounts; per-account ledger reconciliation. |
-| `/transfer` | Transfer, deposit and withdraw, with a live idempotency-key control. |
-| `/transactions` | Statement per account; a detail sheet shows both ledger legs. |
-| `/ledger` | The append-only journal, with cached vs ledger balance side by side. |
-| `/admin` | System-wide debits==credits check, transaction reversal, account unfreeze. Admin only. |
+| Route           | What it does                                                                                              |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `/login`        | Sign in or register. Surfaces the API's password policy.                                                  |
+| `/`             | Balances per currency, account list, merged activity feed, reconciliation status.                         |
+| `/accounts`     | Open, rename, freeze and close accounts; per-account ledger reconciliation.                               |
+| `/transfer`     | Transfer, deposit and withdraw, with a live idempotency-key control.                                      |
+| `/transactions` | Statement per account; a detail sheet shows both ledger legs.                                             |
+| `/ledger`       | The append-only journal, with cached vs ledger balance side by side.                                      |
+| `/admin`        | System-wide debits==credits check, transaction reversal, account unfreeze. Admin only.                    |
+| `/verify-email` | A mock of the verification message, with a Verify button. Public — the link is opened from a mail client. |
 
 ## Things worth clicking
+
+- **Email verification.** Register a new account: mail is mocked, so the link
+  arrives as a toast with a Copy button instead of an inbox. Paste it and you
+  get a page laid out like the message itself. Pressing the button verifies;
+  opening the link does not, so a mail scanner that pre-fetches URLs cannot
+  confirm the address for you. The link is single-use, and resending supersedes
+  it.
 
 - **Idempotency.** The Move money form shows the key it will send. Submit the
   same form twice without regenerating: the same transaction comes back and the

@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { config } from '../../../shared/config/app.config';
+import { logger } from '../../../shared/logger';
 
 export async function connectDatabase(): Promise<void> {
   // Reject unknown fields instead of silently dropping them - a typo in a
@@ -21,8 +22,7 @@ export async function connectDatabase(): Promise<void> {
   // idempotency key, email) in force from the first request.
   await Promise.all(mongoose.modelNames().map((name) => mongoose.model(name).createIndexes()));
 
-  // eslint-disable-next-line no-console
-  console.log('Connected to MongoDB');
+  logger.info('connected to MongoDB');
 }
 
 export async function disconnectDatabase(): Promise<void> {

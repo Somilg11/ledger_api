@@ -46,6 +46,32 @@ export class TransactionController {
     res.status(201).json({ success: true, data: txn });
   }
 
+  async authorize(req: AuthRequest, res: Response) {
+    const actor = actorOf(req);
+    const txn = await transactionService.authorize(actor, {
+      fromAccountId: String(req.body.fromAccount),
+      toAccountId: String(req.body.toAccount),
+      amount: req.body.amount,
+      expiresInSeconds: req.body.expiresInSeconds,
+      idempotencyKey: idempotencyKeyOf(req),
+      reference: req.body.reference,
+      metadata: req.body.metadata,
+    });
+    res.status(201).json({ success: true, data: txn });
+  }
+
+  async capture(req: AuthRequest, res: Response) {
+    const actor = actorOf(req);
+    const txn = await transactionService.capture(actor, String(req.params.id));
+    res.status(200).json({ success: true, data: txn });
+  }
+
+  async voidHold(req: AuthRequest, res: Response) {
+    const actor = actorOf(req);
+    const txn = await transactionService.voidHold(actor, String(req.params.id), req.body?.reason);
+    res.status(200).json({ success: true, data: txn });
+  }
+
   async getById(req: AuthRequest, res: Response) {
     const actor = actorOf(req);
     const txn = await transactionService.getById(actor, String(req.params.id));

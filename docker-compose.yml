@@ -14,9 +14,9 @@ services:
     # 6.19+, which includes Docker Desktop's VM (SERVER-121912).
     image: mongo:8.2
     container_name: ledger-mongo
-    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
     ports:
-      - "27017:27017"
+      - '27017:27017'
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -34,28 +34,28 @@ services:
   redis:
     image: redis:7.4-alpine
     container_name: ledger-redis
-    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1']
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 20
 
   api:
-    profiles: ["api", "web"]
+    profiles: ['api', 'web']
     build:
       context: .
       dockerfile: Dockerfile
     container_name: ledger-api
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       NODE_ENV: development
-      PORT: "3000"
+      PORT: '3000'
       MONGO_URI: mongodb://mongo:27017/ledger?replicaSet=rs0
       REDIS_URL: redis://redis:6379
       # Development-only values. Generate real ones with:
@@ -64,37 +64,48 @@ services:
       JWT_REFRESH_SECRET: dev-only-refresh-secret-change-me-0123456789abcd
       JWT_EXPIRES_IN: 15m
       REFRESH_EXPIRES_IN: 7d
-      ALLOW_SELF_DEPOSIT: "true"
+      ALLOW_SELF_DEPOSIT: 'true'
       CORS_ORIGINS: http://localhost:5173,http://localhost:3001
+      # Mail is mocked; verification links are returned in the API response and
+      # shown by the console. Production ignores this flag entirely.
+      MOCK_EMAIL: 'true'
+      APP_URL: http://localhost:8080
+      REQUIRE_EMAIL_VERIFICATION: 'false'
       # Relaxed for simulation: the console fans out several reads per screen
       # and the end-to-end suite fires a few hundred requests in a minute.
       # Production should keep the defaults (100/min, 10 auth attempts/5min).
-      RATE_LIMIT_MAX: "5000"
-      RATE_LIMIT_AUTH_MAX: "200"
+      RATE_LIMIT_MAX: '5000'
+      RATE_LIMIT_AUTH_MAX: '200'
     depends_on:
       mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 5s
       retries: 10
 
   web:
-    profiles: ["web"]
+    profiles: ['web']
     build:
       context: ./web
       dockerfile: Dockerfile
     container_name: ledger-web
     ports:
-      - "8080:8080"
+      - '8080:8080'
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/']
       interval: 10s
       timeout: 5s
       retries: 10

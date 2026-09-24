@@ -1,14 +1,26 @@
 import { ClientSession } from 'mongoose';
 import { AccountRepository } from '../../infrastructure/database/mongodb/repositories/account.repository';
 import { LedgerRepository } from '../../infrastructure/database/mongodb/repositories/ledger.repository';
-import { AccountModel, IAccount, AccountType, AccountStatus } from '../../infrastructure/database/mongodb/models/account.model';
+import {
+  AccountModel,
+  IAccount,
+  AccountType,
+  AccountStatus,
+} from '../../infrastructure/database/mongodb/models/account.model';
 import { generateAccountNumber } from '../../shared/utils/accountNumber';
 import { assertSupportedCurrency } from '../../shared/utils/money';
 import { NotFoundError, ForbiddenError, ValidationError, ConflictError } from '../../shared/errors';
+import { AuditService } from './audit.service';
 
 export interface Actor {
   id: string;
   roles: string[];
+  email?: string;
+  /** Read fresh from the database on every request by the auth middleware. */
+  emailVerified?: boolean;
+  /** Request context, carried so audit entries can name the exact request. */
+  requestId?: string;
+  ip?: string;
 }
 
 export function isAdmin(actor: Actor): boolean {
@@ -21,7 +33,8 @@ const MAX_ACCOUNTS_PER_USER = 10;
 export class AccountService {
   constructor(
     private repo: AccountRepository = new AccountRepository(),
-    private ledgerRepo: LedgerRepository = new LedgerRepository()
+    private ledgerRepo: LedgerRepository = new LedgerRepository(),
+    private audit: AuditService = new AuditService()
   ) {}
 
   /**
@@ -31,9 +44,14 @@ export class AccountService {
    */
   async createAccount(actor: Actor, input: { userId?: string; accountType: string; currency?: string }) {
     // Only an admin may open an account on behalf of someone else.
-    const ownerId = input.userId && input.userId !== actor.id
-      ? (isAdmin(actor) ? input.userId : (() => { throw new ForbiddenError('Cannot open an account for another user'); })())
-      : actor.id;
+    const ownerId =
+      input.userId && input.userId !== actor.id
+        ? isAdmin(actor)
+          ? input.userId
+          : (() => {
+              throw new ForbiddenError('Cannot open an account for another user');
+            })()
+        : actor.id;
 
     const accountType = String(input.accountType || '').toUpperCase() as AccountType;
     if (!ACCOUNT_TYPES.includes(accountType)) {
@@ -122,7 +140,25 @@ export class AccountService {
       throw new ConflictError('Account must have a zero balance before it can be closed');
     }
 
-    return this.repo.updateMutableFields(accountId, { status });
+    const updated = await this.repo.updateMutableFields(accountId, { status });
+
+    // Only staff actions are audited. A user freezing their own account is
+    // ordinary self-service; an operator doing it to someone else is not.
+    const actingOnSomeoneElse = String(account.userId) !== actor.id;
+    if (isAdmin(actor) && actingOnSomeoneElse) {
+      const action =
+        status === 'FROZEN' ? 'ACCOUNT_FROZEN' : status === 'CLOSED' ? 'ACCOUNT_CLOSED' : 'ACCOUNT_UNFROZEN';
+
+      void this.audit.record(actor, {
+        action,
+        targetType: 'ACCOUNT',
+        targetId: account._id,
+        subjectUserId: account.userId ? String(account.userId) : undefined,
+        metadata: { accountNumber: account.accountNumber, from: account.status, to: status },
+      });
+    }
+
+    return updated;
   }
 
   async updateMetadata(actor: Actor, accountId: string, metadata: Record<string, unknown>) {
@@ -137,7 +173,9 @@ export class AccountService {
    */
   async getOrCreateSystemAccount(currency: string, session?: ClientSession): Promise<IAccount> {
     const accountNumber = `SYSTEM-${currency}`;
-    const existing = await AccountModel.findOne({ accountNumber }).session(session ?? null).exec();
+    const existing = await AccountModel.findOne({ accountNumber })
+      .session(session ?? null)
+      .exec();
     if (existing) return existing;
 
     try {
@@ -158,7 +196,9 @@ export class AccountService {
       return created;
     } catch (err: unknown) {
       if ((err as { code?: number }).code === 11000) {
-        const raced = await AccountModel.findOne({ accountNumber }).session(session ?? null).exec();
+        const raced = await AccountModel.findOne({ accountNumber })
+          .session(session ?? null)
+          .exec();
         if (raced) return raced;
       }
       throw err;

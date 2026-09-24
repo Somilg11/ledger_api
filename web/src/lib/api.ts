@@ -6,7 +6,7 @@ const BASE = '/api/v1';
 export type AccountType = 'SAVINGS' | 'CURRENT' | 'WALLET';
 export type AccountStatus = 'ACTIVE' | 'FROZEN' | 'CLOSED';
 export type TransactionType = 'TRANSFER' | 'DEPOSIT' | 'WITHDRAWAL';
-export type TransactionStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REVERSED';
+export type TransactionStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'CANCELLED' | 'REVERSED';
 export type EntryType = 'DEBIT' | 'CREDIT';
 
 export interface SessionUser {
@@ -15,6 +15,25 @@ export interface SessionUser {
   name?: string;
   roles: string[];
   status: string;
+  emailVerified?: boolean;
+}
+
+/**
+ * Present only while the API has mail mocked. It carries the link that a real
+ * deployment would have emailed, so the simulation can show it instead.
+ */
+export interface MockVerification {
+  link: string;
+  expiresAt: string;
+  delivery: 'mock';
+}
+
+export interface RegisterResult {
+  userId: string;
+  email: string;
+  status: string;
+  emailVerified: boolean;
+  verification?: MockVerification;
 }
 
 export interface LoginResult {
@@ -63,6 +82,22 @@ export interface Transaction {
   metadata?: Record<string, unknown>;
   createdAt: string;
   completedAt?: string;
+  /** Set on a hold: after this the reservation can no longer be captured. */
+  expiresAt?: string;
+}
+
+export interface AuditLog {
+  _id: string;
+  actorId: string;
+  actorEmail?: string;
+  action: 'TRANSACTION_REVERSED' | 'ACCOUNT_FROZEN' | 'ACCOUNT_UNFROZEN' | 'ACCOUNT_CLOSED';
+  targetType: 'ACCOUNT' | 'TRANSACTION';
+  targetId: string;
+  requestId?: string;
+  ip?: string;
+  reason?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface LedgerEntry {
@@ -242,7 +277,19 @@ export const api = {
 
   auth: {
     register: (body: { email: string; password: string; name?: string; phone?: string }) =>
-      request<{ userId: string; email: string; status: string }>('POST', '/auth/register', { body, auth: false }),
+      request<RegisterResult>('POST', '/auth/register', { body, auth: false }),
+
+    verifyEmail: (token: string) =>
+      request<{ verified: true; email: string }>('POST', '/auth/verify-email', {
+        body: { token },
+        auth: false,
+      }),
+
+    resendVerification: (email: string) =>
+      request<{ sent: true; verification?: MockVerification }>('POST', '/auth/resend-verification', {
+        body: { email },
+        auth: false,
+      }),
 
     login: (body: { email: string; password: string }) =>
       request<LoginResult>('POST', '/auth/login', { body, auth: false }),
@@ -284,6 +331,22 @@ export const api = {
     withdraw: (body: { accountId: string; amount: number; reference?: string }, idempotencyKey?: string) =>
       request<Transaction>('POST', '/transactions/withdraw', { body, idempotencyKey }),
 
+    authorize: (
+      body: {
+        fromAccount: string;
+        toAccount: string;
+        amount: number;
+        reference?: string;
+        expiresInSeconds?: number;
+      },
+      idempotencyKey?: string
+    ) => request<Transaction>('POST', '/transactions/authorize', { body, idempotencyKey }),
+
+    capture: (id: string) => request<Transaction>('POST', `/transactions/${id}/capture`),
+
+    voidHold: (id: string, reason?: string) =>
+      request<Transaction>('POST', `/transactions/${id}/void`, { body: { reason } }),
+
     get: (id: string) => request<Transaction>('GET', `/transactions/${id}`),
 
     listByAccount: (accountId: string, limit = 50, skip = 0) =>
@@ -304,5 +367,10 @@ export const api = {
       request<BalanceReport>('GET', `/ledger/accounts/${accountId}/reconcile`),
 
     verify: () => request<VerifyResult>('GET', '/ledger/verify'),
+  },
+
+  admin: {
+    auditLogs: (limit = 50, skip = 0) =>
+      request<AuditLog[]>('GET', `/admin/audit-logs?limit=${limit}&skip=${skip}`),
   },
 };

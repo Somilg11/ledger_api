@@ -1,10 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowRight, KeyRound, RefreshCw } from 'lucide-react';
 import { ApiError, api, newIdempotencyKey, type Account, type Transaction } from '@/lib/api';
 import { describeError, useAsync } from '@/lib/useAsync';
 import { formatMinor, parseAmount, symbolFor } from '@/lib/money';
 import { absoluteTime } from '@/lib/format';
-import { Field, IdChip, InlineError, Money, PageHeader, StatusBadge, SubmitButton } from '@/components/primitives';
+import {
+  Field,
+  IdChip,
+  InlineError,
+  Money,
+  PageHeader,
+  StatusBadge,
+  SubmitButton,
+} from '@/components/primitives';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 
-type Mode = 'transfer' | 'deposit' | 'withdraw';
+type Mode = 'transfer' | 'deposit' | 'withdraw' | 'authorize';
 
 export function Transfer() {
   const { data: accounts, error, loading, reload } = useAsync(() => api.accounts.list(), []);
@@ -62,10 +70,11 @@ export function Transfer() {
               </div>
             ) : (
               <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)}>
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-4">
                   <TabsTrigger value="transfer">Transfer</TabsTrigger>
                   <TabsTrigger value="deposit">Deposit</TabsTrigger>
                   <TabsTrigger value="withdraw">Withdraw</TabsTrigger>
+                  <TabsTrigger value="authorize">Hold</TabsTrigger>
                 </TabsList>
 
                 <div className="pt-5">
@@ -77,6 +86,9 @@ export function Transfer() {
                   </TabsContent>
                   <TabsContent value="withdraw" className="m-0">
                     <MoneyForm mode="withdraw" accounts={usable} onDone={handleDone} />
+                  </TabsContent>
+                  <TabsContent value="authorize" className="m-0">
+                    <MoneyForm mode="authorize" accounts={usable} onDone={handleDone} />
                   </TabsContent>
                 </div>
               </Tabs>
@@ -99,7 +111,11 @@ function MoneyForm({
   accounts: Account[];
   onDone: (txn: Transaction) => void;
 }) {
-  const [from, setFrom] = useState('');
+  // A hold moves between two accounts just like a transfer does; it simply
+  // does not settle yet.
+  const needsDestination = mode === 'transfer' || mode === 'authorize';
+
+  const [chosenFrom, setChosenFrom] = useState('');
   const [to, setTo] = useState('');
   const [amount, setAmount] = useState('');
   const [reference, setReference] = useState('');
@@ -109,15 +125,16 @@ function MoneyForm({
   const [keyConflict, setKeyConflict] = useState(false);
   const [pending, setPending] = useState(false);
 
-  useEffect(() => {
-    if (from || accounts.length === 0) return;
-    // Default to an account that actually has a same-currency counterpart, so
-    // a transfer does not open on a dead end with no valid destination.
-    const transferable = accounts.find((candidate) =>
-      accounts.some((other) => other._id !== candidate._id && other.currency === candidate.currency)
-    );
-    setFrom((mode === 'transfer' ? transferable ?? accounts[0] : accounts[0])._id);
-  }, [accounts, from, mode]);
+  // Derived during render rather than synced in an effect. For a transfer the
+  // default is an account that actually has a same-currency counterpart, so the
+  // form does not open on a dead end with no valid destination.
+  const defaultFrom = needsDestination
+    ? (accounts.find((candidate) =>
+        accounts.some((other) => other._id !== candidate._id && other.currency === candidate.currency)
+      ) ?? accounts[0])
+    : accounts[0];
+
+  const from = chosenFrom || defaultFrom?._id || '';
 
   const source = accounts.find((a) => a._id === from);
   const currency = source?.currency ?? 'INR';
@@ -139,7 +156,7 @@ function MoneyForm({
       setError('Choose an account');
       return;
     }
-    if (mode === 'transfer' && !to) {
+    if (needsDestination && !to) {
       setError('Choose a destination account');
       return;
     }
@@ -152,11 +169,17 @@ function MoneyForm({
       const txn =
         mode === 'transfer'
           ? await api.transactions.transfer({ fromAccount: from, toAccount: to, ...body }, idempotencyKey)
-          : mode === 'deposit'
-            ? await api.transactions.deposit({ accountId: from, ...body }, idempotencyKey)
-            : await api.transactions.withdraw({ accountId: from, ...body }, idempotencyKey);
+          : mode === 'authorize'
+            ? await api.transactions.authorize({ fromAccount: from, toAccount: to, ...body }, idempotencyKey)
+            : mode === 'deposit'
+              ? await api.transactions.deposit({ accountId: from, ...body }, idempotencyKey)
+              : await api.transactions.withdraw({ accountId: from, ...body }, idempotencyKey);
 
-      toast.success(`${mode[0].toUpperCase()}${mode.slice(1)} of ${formatMinor(minor, currency)} completed`);
+      toast.success(
+        mode === 'authorize'
+          ? `${formatMinor(minor, currency)} reserved — capture or void it from Transactions`
+          : `${mode[0].toUpperCase()}${mode.slice(1)} of ${formatMinor(minor, currency)} completed`
+      );
       setKeyConflict(false);
       // The amount deliberately stays put: submitting again unchanged is how
       // you see the idempotent replay.
@@ -176,8 +199,8 @@ function MoneyForm({
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
-        <Label>{mode === 'transfer' ? 'From account' : 'Account'}</Label>
-        <Select value={from} onValueChange={(v) => (setFrom(v), setTo(''))}>
+        <Label>{needsDestination ? 'From account' : 'Account'}</Label>
+        <Select value={from} onValueChange={(v) => (setChosenFrom(v), setTo(''))}>
           <SelectTrigger className="w-full">
             <SelectValue placeholder="Choose an account" />
           </SelectTrigger>
@@ -200,7 +223,7 @@ function MoneyForm({
         )}
       </div>
 
-      {mode === 'transfer' && (
+      {needsDestination && (
         <div className="space-y-1.5">
           <Label>To account</Label>
           <Select value={to} onValueChange={setTo} disabled={destinations.length === 0}>
@@ -261,6 +284,13 @@ function MoneyForm({
         />
       </div>
 
+      {mode === 'authorize' && (
+        <p className="text-muted-foreground border-border rounded-md border border-dashed px-3 py-2 text-[11px] leading-relaxed">
+          A hold reserves the funds without moving them: available balance drops, the ledger balance does not,
+          and no journal entries are written. Capture it to settle, or void it to release.
+        </p>
+      )}
+
       <Separator />
 
       <div className="space-y-2">
@@ -316,7 +346,13 @@ function MoneyForm({
       </div>
 
       <SubmitButton pending={pending} onClick={() => void submit()} className="w-full">
-        {mode === 'transfer' ? 'Send transfer' : mode === 'deposit' ? 'Deposit' : 'Withdraw'}
+        {mode === 'transfer'
+          ? 'Send transfer'
+          : mode === 'authorize'
+            ? 'Place hold'
+            : mode === 'deposit'
+              ? 'Deposit'
+              : 'Withdraw'}
         <ArrowRight className="size-3.5" />
       </SubmitButton>
     </div>
@@ -361,7 +397,9 @@ function ResultPanel({ transaction, replayed }: { transaction: Transaction | nul
                 <IdChip id={transaction._id} />
               </Field>
               <Field label="Reference">{transaction.reference || '—'}</Field>
-              <Field label="Completed">{absoluteTime(transaction.completedAt ?? transaction.createdAt)}</Field>
+              <Field label="Completed">
+                {absoluteTime(transaction.completedAt ?? transaction.createdAt)}
+              </Field>
             </div>
 
             <div>

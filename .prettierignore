@@ -1,0 +1,10 @@
+dist
+web/dist
+node_modules
+web/node_modules
+package-lock.json
+web/package-lock.json
+docs/openapi.json
+docs/flow-diagrams.md
+notes
+coverage

@@ -32,6 +32,16 @@ export async function me(req: AuthRequest, res: Response) {
   res.status(200).json({ success: true, data: profile });
 }
 
+export async function verifyEmail(req: Request, res: Response) {
+  const result = await authService.verifyEmail(req.body.token);
+  res.status(200).json({ success: true, data: result });
+}
+
+export async function resendVerification(req: Request, res: Response) {
+  const result = await authService.resendEmailVerification(req.body.email);
+  res.status(200).json({ success: true, data: result });
+}
+
 export async function changePassword(req: AuthRequest, res: Response) {
   if (!req.user) throw new UnauthorizedError('Not authenticated');
   const { currentPassword, newPassword } = req.body;

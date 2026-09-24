@@ -71,9 +71,9 @@ bookkeeping.
 Alice sends Bob ₹100, and the system writes:
 
 | Account | Entry type | Amount |
-|---|---|---|
-| Alice | DEBIT | 100 |
-| Bob | CREDIT | 100 |
+| ------- | ---------- | ------ |
+| Alice   | DEBIT      | 100    |
+| Bob     | CREDIT     | 100    |
 
 A **debit** takes money out. A **credit** puts money in. They are always written
 together, always equal, always in the same breath.
@@ -81,7 +81,7 @@ together, always equal, always in the same breath.
 Now three things become true that were not true before:
 
 1. **Balance is derived, not stored.** Alice's balance is the sum of her credits
-   minus the sum of her debits. It is a *conclusion*, not an assumption.
+   minus the sum of her debits. It is a _conclusion_, not an assumption.
 2. **Corruption is detectable.** Add up every debit in the entire database. Add
    up every credit. They must be identical. If they are not, something is broken,
    and you know immediately instead of a year later.
@@ -94,7 +94,7 @@ badge on the Admin screen.
 ### What about deposits and withdrawals?
 
 Here is a puzzle. A transfer has two sides — Alice and Bob. But when you deposit
-cash, where does the money come *from*? If you only credit Alice, credits now
+cash, where does the money come _from_? If you only credit Alice, credits now
 exceed debits and the books no longer balance.
 
 Real banks solve this by treating the bank itself as an account. Money does not
@@ -103,11 +103,11 @@ appear from nowhere; it moves from the bank's own books into yours.
 So this system keeps a hidden **system account** per currency (`SYSTEM-INR`,
 `SYSTEM-USD`, and so on):
 
-| Operation | Debit | Credit |
-|---|---|---|
-| Transfer | sender | receiver |
-| Deposit | system account | customer |
-| Withdrawal | customer | system account |
+| Operation  | Debit          | Credit         |
+| ---------- | -------------- | -------------- |
+| Transfer   | sender         | receiver       |
+| Deposit    | system account | customer       |
+| Withdrawal | customer       | system account |
 
 The system account is allowed to go negative — that is the bank's liability, the
 money it owes to depositors. Customer accounts are not. The invariant holds in
@@ -134,8 +134,8 @@ Computers cannot represent `0.1` exactly in binary, the same way you cannot
 write `1/3` exactly in decimal. So:
 
 ```js
-0.1 + 0.2 === 0.3   // false
-0.1 + 0.2           // 0.30000000000000004
+0.1 + 0.2 === 0.3; // false
+0.1 + 0.2; // 0.30000000000000004
 ```
 
 That tiny error is harmless in a graphics engine. In a ledger it is fatal:
@@ -148,7 +148,7 @@ smallest unit**: paise for rupees, cents for dollars.
 - ₹500.00 is stored as `50000`
 - ₹0.01 is stored as `1`
 
-The API only accepts integers. It rejects `10.5`. It also rejects the *string*
+The API only accepts integers. It rejects `10.5`. It also rejects the _string_
 `"1000"` — not because it could not parse it, but because a client sending a
 string is usually a client that also has a rounding bug, and failing loudly at
 the boundary is cheaper than discovering it in the books later.
@@ -168,7 +168,7 @@ You click Send on ₹120 from Alice to Bob. Here is every step, in order.
 one origin, so cross-origin rules never come into play.
 
 **2. Rate limiting.** Has this IP made more than 100 requests this minute? If
-Redis is down, the request is *allowed* rather than blocked — a rate limiter
+Redis is down, the request is _allowed_ rather than blocked — a rate limiter
 that fails closed turns a cache outage into a total outage.
 
 **3. Authentication.** The `Authorization: Bearer <token>` header is verified:
@@ -215,7 +215,7 @@ await Account.updateOne(..., { $inc: { balance: -amount } });  // write
 ```
 
 Two requests can both run the read, both see enough money, and both write. The
-account goes negative. This is a *race condition*, and it is how real money gets
+account goes negative. This is a _race condition_, and it is how real money gets
 double-spent.
 
 The fix is to put the condition inside the write itself, so the database
@@ -223,9 +223,9 @@ evaluates it atomically:
 
 ```js
 Account.findOneAndUpdate(
-  { _id: from, availableBalance: { $gte: amount } },   // condition is part of the query
+  { _id: from, availableBalance: { $gte: amount } }, // condition is part of the query
   { $inc: { balance: -amount, availableBalance: -amount } }
-)
+);
 ```
 
 If the condition fails, the update matches nothing and returns `null` — no read,
@@ -282,13 +282,13 @@ sentence about the ownership check.
 
 ### What each piece does
 
-| Piece | Role |
-|---|---|
-| **MongoDB** | Stores users, accounts, transactions and ledger entries. Must be a replica set for transactions. |
-| **Redis** | Rate limit counters, idempotency records, live refresh tokens, revoked access tokens. |
-| **Express API** | All logic. Stateless — every piece of state is in Mongo or Redis, so you can run many copies. |
-| **nginx** | Serves the built console and proxies `/api` to the API, keeping the browser on one origin. |
-| **React console** | The simulation UI. Holds no logic of its own; it is a window onto the API. |
+| Piece             | Role                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------ |
+| **MongoDB**       | Stores users, accounts, transactions and ledger entries. Must be a replica set for transactions. |
+| **Redis**         | Rate limit counters, idempotency records, live refresh tokens, revoked access tokens.            |
+| **Express API**   | All logic. Stateless — every piece of state is in Mongo or Redis, so you can run many copies.    |
+| **nginx**         | Serves the built console and proxies `/api` to the API, keeping the browser on one origin.       |
+| **React console** | The simulation UI. Holds no logic of its own; it is a window onto the API.                       |
 
 ---
 
@@ -300,28 +300,28 @@ Four collections.
 
 Who can log in.
 
-| Field | Why it exists |
-|---|---|
-| `email` | Stored lowercase with a unique index, so `Alice@x.com` and `alice@x.com` cannot become two people |
-| `passwordHash` | bcrypt, cost 12. Marked `select: false`, so a query has to *ask* for it — it cannot leak by accident |
-| `roles` | `USER` or `ADMIN` |
-| `status` | `ACTIVE`, `SUSPENDED`, `CLOSED`. Checked at login *and* on every request |
-| `tokenVersion` | Incremented on password change. Every token issued before then stops working instantly |
-| `failedLoginAttempts` / `lockedUntil` | Five wrong passwords locks the account for 15 minutes |
+| Field                                 | Why it exists                                                                                        |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `email`                               | Stored lowercase with a unique index, so `Alice@x.com` and `alice@x.com` cannot become two people    |
+| `passwordHash`                        | bcrypt, cost 12. Marked `select: false`, so a query has to _ask_ for it — it cannot leak by accident |
+| `roles`                               | `USER` or `ADMIN`                                                                                    |
+| `status`                              | `ACTIVE`, `SUSPENDED`, `CLOSED`. Checked at login _and_ on every request                             |
+| `tokenVersion`                        | Incremented on password change. Every token issued before then stops working instantly               |
+| `failedLoginAttempts` / `lockedUntil` | Five wrong passwords locks the account for 15 minutes                                                |
 
 ### accounts
 
 Where money sits.
 
-| Field | Why it exists |
-|---|---|
-| `accountNumber` | 16 digits from a cryptographic RNG, generated server-side, unique |
-| `accountType` | `SAVINGS`, `CURRENT`, `WALLET` |
-| `currency` | Immutable after creation |
-| `balance` | Minor units. The cached number — always cross-checked against the ledger |
-| `availableBalance` | Balance minus holds. Debits check against this |
-| `status` | `ACTIVE`, `FROZEN`, `CLOSED` |
-| `isSystem` | Marks the bank's contra accounts, which may go negative |
+| Field              | Why it exists                                                            |
+| ------------------ | ------------------------------------------------------------------------ |
+| `accountNumber`    | 16 digits from a cryptographic RNG, generated server-side, unique        |
+| `accountType`      | `SAVINGS`, `CURRENT`, `WALLET`                                           |
+| `currency`         | Immutable after creation                                                 |
+| `balance`          | Minor units. The cached number — always cross-checked against the ledger |
+| `availableBalance` | Balance minus holds. Debits check against this                           |
+| `status`           | `ACTIVE`, `FROZEN`, `CLOSED`                                             |
+| `isSystem`         | Marks the bank's contra accounts, which may go negative                  |
 
 Accounts always open at **zero**. A balance in the request body is ignored. The
 only way money enters is a ledgered deposit.
@@ -330,26 +330,26 @@ only way money enters is a ledgered deposit.
 
 What someone did — the intent and the outcome.
 
-| Field | Why it exists |
-|---|---|
-| `fromAccount` / `toAccount` | References to accounts |
-| `amount`, `currency` | Minor units |
-| `type` | `TRANSFER`, `DEPOSIT`, `WITHDRAWAL` |
-| `status` | `PENDING`, `COMPLETED`, `FAILED`, `REVERSED` |
-| `initiatedBy` | Which user asked for it |
-| `idempotencyKey` | **Unique sparse index** — two requests with the same key cannot both commit |
+| Field                       | Why it exists                                                               |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `fromAccount` / `toAccount` | References to accounts                                                      |
+| `amount`, `currency`        | Minor units                                                                 |
+| `type`                      | `TRANSFER`, `DEPOSIT`, `WITHDRAWAL`                                         |
+| `status`                    | `PENDING`, `COMPLETED`, `FAILED`, `REVERSED`                                |
+| `initiatedBy`               | Which user asked for it                                                     |
+| `idempotencyKey`            | **Unique sparse index** — two requests with the same key cannot both commit |
 
 ### ledger
 
 What actually moved — the accounting truth.
 
-| Field | Why it exists |
-|---|---|
-| `transactionId` | Which transaction produced this entry |
-| `accountId` | Whose book it lands in |
-| `entryType` | `DEBIT` or `CREDIT` |
-| `amount` | Always positive; direction comes from `entryType` |
-| `balanceAfter` | The account balance immediately after this entry — the audit trail |
+| Field           | Why it exists                                                      |
+| --------------- | ------------------------------------------------------------------ |
+| `transactionId` | Which transaction produced this entry                              |
+| `accountId`     | Whose book it lands in                                             |
+| `entryType`     | `DEBIT` or `CREDIT`                                                |
+| `amount`        | Always positive; direction comes from `entryType`                  |
+| `balanceAfter`  | The account balance immediately after this entry — the audit trail |
 
 **Ledger entries are immutable.** The schema blocks updates and deletes
 outright. History that can be edited is not history. A mistake is fixed by
@@ -358,8 +358,8 @@ does.
 
 ### Transactions vs ledger — why both?
 
-A transaction is the *intent*: "Alice wanted to send Bob ₹120." A ledger entry
-is the *effect*: "₹120 left Alice", "₹120 arrived at Bob."
+A transaction is the _intent_: "Alice wanted to send Bob ₹120." A ledger entry
+is the _effect_: "₹120 left Alice", "₹120 arrived at Bob."
 
 One transaction always produces exactly two ledger entries. Keeping them
 separate means you can ask "what did the user do?" and "what happened to the
@@ -384,8 +384,8 @@ the opening balance is always zero regardless of what the body says.
 ### Attack: mint money by updating an account
 
 `PUT /accounts/:id` passed the whole body to the database, so
-`{"balance": 999999999}` rewrote the balance directly. This is *mass
-assignment*: the client controls which fields get written.
+`{"balance": 999999999}` rewrote the balance directly. This is _mass
+assignment_: the client controls which fields get written.
 
 **Defence:** the update path writes an allow-list of exactly two fields
 (`metadata`, `status`). Balances are not writable by any route — they move only
@@ -393,7 +393,7 @@ inside a ledger transaction.
 
 ### Attack: steal someone's session through the cache
 
-The idempotency layer originally ran on *every* endpoint including `/auth/login`,
+The idempotency layer originally ran on _every_ endpoint including `/auth/login`,
 and its cache key was nothing but the client-supplied header. If you sent the
 same key someone else had used, you were handed their cached response — access
 token, refresh token and all.
@@ -401,7 +401,7 @@ token, refresh token and all.
 **Defence:** the cache key is now `sha256(userId, method, path, key, body)`. It
 is bound to the caller and to the exact request. Only successful responses are
 cached — a cached 500 would turn a transient failure into a permanent one. And
-reusing a key with a *different* body is a 409, because a client bug must not be
+reusing a key with a _different_ body is a 409, because a client bug must not be
 handed a response that does not match what it asked for.
 
 ### Attack: a token that never dies
@@ -466,7 +466,7 @@ Sending `{"email": {"$ne": null}}` instead of a string can turn a lookup into
 
 **Defence:** every id and email is type-checked at the edge, plus Mongoose's
 `sanitizeFilter` as a second layer. (This one has a sharp edge worth knowing:
-`sanitizeFilter` also rewrites *legitimate* operators, which silently broke the
+`sanitizeFilter` also rewrites _legitimate_ operators, which silently broke the
 conditional balance check until it was wrapped in `mongoose.trusted()`. The test
 suite caught it.)
 
@@ -479,65 +479,157 @@ suite caught it.)
 - **100 kB body cap**, `helmet` security headers, `x-powered-by` disabled, CORS
   deny-by-default.
 - **Bounded pagination** — `limit=1000000` is a 400, not a database scan.
+- **Redaction at the logger** — `authorization`, `password`, `*.token` and
+  friends are censored centrally, so a newly added log line cannot leak a
+  credential by forgetting to.
+- **An audit trail for staff actions** — reversals, and an operator freezing or
+  unfreezing someone else's account, are written to an append-only collection
+  with the actor, the reason and the request id. The collection refuses updates
+  and deletes, for the same reason the ledger does: a record of privileged
+  actions that the privileged can edit records nothing.
+
+### Holds: money that is spoken for but has not moved
+
+A card machine does not move money when you tap it. It puts a **hold** on the
+funds — they are spoken for, so you cannot spend them twice — and the actual
+transfer happens later, when the merchant settles.
+
+That is the entire reason an account carries two numbers:
+
+- `balance` — money that has actually moved, and always equals the journal
+- `availableBalance` — balance minus everything currently reserved
+
+| Operation    | `availableBalance` | `balance` | Journal entries |
+| ------------ | ------------------ | --------- | --------------- |
+| Place a hold | −amount            | unchanged | **none**        |
+| Capture it   | unchanged          | −amount   | debit + credit  |
+| Void it      | +amount            | unchanged | **none**        |
+
+The row that matters is the first one. A hold writes **nothing** to the
+journal, because in accounting terms nothing has happened. This keeps the
+system's central invariant intact: total debits still equal total credits while
+holds are outstanding, and a held account still reconciles, because
+reconciliation compares `balance` to the journal and a hold does not touch
+either.
+
+Placing a hold is race-safe the same way a debit is — the balance condition
+lives inside the update filter, so two simultaneous holds cannot reserve the
+same funds.
+
+This is also what `PENDING` means: a transaction that has been authorised but
+not settled. Capture makes it `COMPLETED`; voiding makes it `CANCELLED`. An
+expired hold can only be voided, never captured.
+
+### Email verification, with mail mocked
+
+Registration issues a single-use verification link. Nothing is actually
+delivered — there is no SMTP anywhere in this project — but everything up to
+the moment of delivery is real:
+
+- A 32-byte random token is generated. Only its **SHA-256 hash** is stored, for
+  the same reason passwords are hashed: a leaked database dump must not hand an
+  attacker working links.
+- The token expires in 24 hours, via a MongoDB TTL index that deletes the row.
+- Claiming it is a single atomic update, so two simultaneous clicks cannot both
+  consume it.
+- Expired, already used and never issued all return the **same** error. Telling
+  them apart would let someone probe which tokens are real.
+- Re-sending supersedes the previous link rather than leaving several live.
+- `POST /resend-verification` returns the same 200 whether or not the address
+  exists, so it cannot be used to enumerate accounts.
+
+The mock transport is a `Mailer` implementation that logs the message and keeps
+it in a small in-memory outbox. Real delivery means writing one more class
+against the same interface; no caller changes.
+
+**The one thing to be careful about.** While mail is mocked, the API returns
+the verification link in the response body so the console can show it. That is
+a genuine hole if it ever shipped — anyone who can call `/auth/register` for an
+address would be handed that address's link. So the flag is not merely
+_defaulted_ off in production, it is **unavailable** there:
+
+```ts
+mockEmail: !isProduction && process.env.MOCK_EMAIL !== 'false',
+```
+
+Setting `MOCK_EMAIL=true` in production does nothing. A convenience that would
+be a vulnerability in production should not be reachable by configuration.
+
+Verification is tracked but not enforced by default, so the simulation is
+usable the moment you register. Setting `REQUIRE_EMAIL_VERIFICATION=true` gates
+money movement on it, reading the flag fresh from the database on every request
+rather than trusting anything in the token.
 
 ---
 
 ## 8. Every endpoint
 
-25 routes, plus two health checks. Full details with request and response bodies
+32 routes, plus two health checks and an interactive reference at `/docs`. Full details with request and response bodies
 are in [`api-reference.md`](api-reference.md).
 
 ### Health
 
-| Method | Path | Auth | What it does |
-|---|---|---|---|
-| GET | `/health` | — | Is the process alive |
-| GET | `/ready` | — | Are MongoDB *and* Redis actually usable (503 if not) |
+| Method | Path      | Auth | What it does                                         |
+| ------ | --------- | ---- | ---------------------------------------------------- |
+| GET    | `/health` | —    | Is the process alive                                 |
+| GET    | `/ready`  | —    | Are MongoDB _and_ Redis actually usable (503 if not) |
 
 ### Auth — `/api/v1/auth`
 
-| Method | Path | Auth | What it does |
-|---|---|---|---|
-| POST | `/register` | — | Create a user |
-| POST | `/login` | — | Get an access + refresh token |
-| POST | `/refresh` | — | Rotate the refresh token |
-| POST | `/logout` | Bearer | Revoke this session (or all of them) |
-| GET | `/me` | Bearer | Who am I |
-| POST | `/change-password` | Bearer | Change password, kill every session |
+| Method | Path                   | Auth   | What it does                               |
+| ------ | ---------------------- | ------ | ------------------------------------------ |
+| POST   | `/register`            | —      | Create a user                              |
+| POST   | `/login`               | —      | Get an access + refresh token              |
+| POST   | `/refresh`             | —      | Rotate the refresh token                   |
+| POST   | `/verify-email`        | —      | Confirm an address with a single-use token |
+| POST   | `/resend-verification` | —      | Re-issue the verification link             |
+| POST   | `/logout`              | Bearer | Revoke this session (or all of them)       |
+| GET    | `/me`                  | Bearer | Who am I                                   |
+| POST   | `/change-password`     | Bearer | Change password, kill every session        |
 
 ### Accounts — `/api/v1/accounts`
 
-| Method | Path | What it does |
-|---|---|---|
-| POST | `/` | Open an account (always at zero) |
-| GET | `/` | List my accounts |
-| GET | `/:id` | One account |
-| GET | `/:id/balance` | Balance **plus a live ledger reconciliation** |
-| GET | `/user/:userId` | A user's accounts (self, or admin) |
-| PATCH | `/:id` | Update `metadata` only |
-| POST | `/:id/freeze` | Freeze |
-| POST | `/:id/unfreeze` | Unfreeze — **admin only** |
-| DELETE | `/:id` | Close (requires a zero balance) |
+| Method | Path            | What it does                                  |
+| ------ | --------------- | --------------------------------------------- |
+| POST   | `/`             | Open an account (always at zero)              |
+| GET    | `/`             | List my accounts                              |
+| GET    | `/:id`          | One account                                   |
+| GET    | `/:id/balance`  | Balance **plus a live ledger reconciliation** |
+| GET    | `/user/:userId` | A user's accounts (self, or admin)            |
+| PATCH  | `/:id`          | Update `metadata` only                        |
+| POST   | `/:id/freeze`   | Freeze                                        |
+| POST   | `/:id/unfreeze` | Unfreeze — **admin only**                     |
+| DELETE | `/:id`          | Close (requires a zero balance)               |
 
 ### Transactions — `/api/v1/transactions`
 
-| Method | Path | What it does |
-|---|---|---|
-| POST | `/` | Transfer between two accounts |
-| POST | `/deposit` | Money in, from the bank's contra account |
-| POST | `/withdraw` | Money out |
-| GET | `/:id` | One transaction |
-| GET | `/account/:id` | Statement for an account |
-| POST | `/:id/reverse` | Reverse a completed transaction — **admin only** |
+| Method | Path           | What it does                                     |
+| ------ | -------------- | ------------------------------------------------ |
+| POST   | `/`            | Transfer between two accounts                    |
+| POST   | `/deposit`     | Money in, from the bank's contra account         |
+| POST   | `/withdraw`    | Money out                                        |
+| POST   | `/authorize`   | Place a hold — reserve funds without moving them |
+| POST   | `/:id/capture` | Settle a hold                                    |
+| POST   | `/:id/void`    | Release a hold                                   |
+| GET    | `/:id`         | One transaction                                  |
+| GET    | `/account/:id` | Statement for an account                         |
+| POST   | `/:id/reverse` | Reverse a completed transaction — **admin only** |
 
 ### Ledger — `/api/v1/ledger`
 
-| Method | Path | What it does |
-|---|---|---|
-| GET | `/accounts/:accountId` | Journal entries for an account |
-| GET | `/accounts/:accountId/reconcile` | Cached balance vs the journal |
-| GET | `/transactions/:transactionId` | Both legs of one transaction |
-| GET | `/verify` | System-wide debits == credits — **admin only** |
+| Method | Path                             | What it does                                   |
+| ------ | -------------------------------- | ---------------------------------------------- |
+| GET    | `/accounts/:accountId`           | Journal entries for an account                 |
+| GET    | `/accounts/:accountId/reconcile` | Cached balance vs the journal                  |
+| GET    | `/transactions/:transactionId`   | Both legs of one transaction                   |
+| GET    | `/verify`                        | System-wide debits == credits — **admin only** |
+
+### Admin — `/api/v1/admin` (admin only)
+
+| Method | Path                    | What it does                                   |
+| ------ | ----------------------- | ---------------------------------------------- |
+| GET    | `/audit-logs`           | Privileged actions, newest first. Append-only. |
+| GET    | `/audit-logs/:targetId` | The trail for one account or transaction       |
 
 ---
 
@@ -552,12 +644,12 @@ npm run seed         # demo users, funded accounts, some traffic
 
 Then open **http://localhost:8080**.
 
-| Service | Port |
-|---|---|
-| Console | 8080 |
-| API | 3000 |
+| Service | Port  |
+| ------- | ----- |
+| Console | 8080  |
+| API     | 3000  |
 | MongoDB | 27017 |
-| Redis | 6379 |
+| Redis   | 6379  |
 
 Useful commands:
 
@@ -610,11 +702,11 @@ production keeps 100/minute.
 
 All three use the password `Sup3rStrong!Pass`:
 
-| Email | Roles | What they have |
-|---|---|---|
-| `alice@example.com` | USER | Three accounts (INR savings, INR wallet, USD current), funded |
-| `bob@example.com` | USER | One INR savings account, funded |
-| `admin@example.com` | USER, ADMIN | An account, plus the Admin screen |
+| Email               | Roles       | What they have                                                |
+| ------------------- | ----------- | ------------------------------------------------------------- |
+| `alice@example.com` | USER        | Three accounts (INR savings, INR wallet, USD current), funded |
+| `bob@example.com`   | USER        | One INR savings account, funded                               |
+| `admin@example.com` | USER, ADMIN | An account, plus the Admin screen                             |
 
 `ADMIN` deliberately has no HTTP route that grants it — the seed script writes
 it straight to the database. A role that can reverse transactions should not be
@@ -629,14 +721,15 @@ interesting behaviour is the system's, not the UI's.
 
 ### The screens
 
-| Screen | What you see |
-|---|---|
-| **Dashboard** | Totals per currency, your accounts, a merged activity feed, reconciliation status |
-| **Accounts** | Open, rename, freeze, close; each row shows cached balance, ledger balance and whether they agree |
-| **Move money** | Transfer, deposit and withdraw, with a live idempotency-key control |
-| **Transactions** | Statement per account; click a row for both ledger legs |
-| **Ledger** | The raw journal — every debit and credit with the balance after each |
-| **Admin** | System-wide verification, transaction reversal, account unfreeze (admin only) |
+| Screen           | What you see                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| **Dashboard**    | Totals per currency, your accounts, a merged activity feed, reconciliation status                 |
+| **Accounts**     | Open, rename, freeze, close; each row shows cached balance, ledger balance and whether they agree |
+| **Move money**   | Transfer, deposit and withdraw, with a live idempotency-key control                               |
+| **Transactions** | Statement per account; click a row for both ledger legs                                           |
+| **Ledger**       | The raw journal — every debit and credit with the balance after each                              |
+| **Admin**        | System-wide verification, transaction reversal, account unfreeze (admin only)                     |
+| **Verify email** | A mock of the verification message, reachable signed out at `/verify-email`                       |
 
 ### Walkthrough: watch double-entry happen
 
@@ -656,8 +749,8 @@ This is the most valuable five minutes in the app.
    idempotency key shown in the form.
 2. Send it. Balance drops by ₹50.
 3. **Without changing anything, press Send again.**
-4. The balance does **not** move. The panel says *"Replayed — the idempotency
-   key matched an earlier request."* The same transaction comes back.
+4. The balance does **not** move. The panel says _"Replayed — the idempotency
+   key matched an earlier request."_ The same transaction comes back.
 
 That is the guarantee that makes a payments API safe to retry. A client whose
 connection drops mid-request has no idea whether the money moved. Without this
@@ -669,7 +762,7 @@ Now the other half:
 5. Change the amount to `75`, keep the same key, send.
 6. **409 Conflict.** The form offers to rotate the key.
 
-The key is bound to the *payload*, not just to the caller. Returning the ₹50
+The key is bound to the _payload_, not just to the caller. Returning the ₹50
 response to a ₹75 request would be worse than failing.
 
 ### Walkthrough: you cannot overdraw
@@ -704,6 +797,40 @@ event, which is the only way history stays trustworthy.
 
 5. Try reversing the same transaction again: **409**.
 
+### Walkthrough: a hold, then capture or void
+
+1. **Move money → Hold**. Pick two of your accounts, enter an amount, place it.
+2. Look at **Accounts**. The available balance dropped; the balance did not.
+3. Open **Ledger** for that account: **nothing new**. No money has moved.
+4. Check **Admin → Double-entry verification**: still balanced. An outstanding
+   hold cannot unbalance books it never touched.
+5. Go to **Transactions** and open the `PENDING` row. Capture it, and both
+   ledger entries appear at once. Or void it, and the reservation comes back
+   with the journal still untouched.
+
+### Walkthrough: email verification without any email
+
+Mail is mocked, so the link that would have been sent is shown to you instead.
+
+1. Sign out, then **Create account** with any address and a strong password.
+2. A toast appears with the verification link and a **Copy** button. Copy it.
+3. You land on the dashboard with a banner: _your email address is not
+   verified_. Everything still works — verification is tracked, not enforced.
+4. Paste the link into a new tab. You get a page laid out like the email you
+   would have received: sender, subject, explanation, and one **Verify email
+   address** button.
+5. Press it. The address is confirmed and the banner disappears.
+6. Open the same link again and press Verify: _this verification link is
+   invalid or has expired_. Tokens are single-use.
+7. Press **Resend link** on the banner of an unverified account and you get a
+   new link — and the previous one stops working.
+
+Two details worth noticing. Opening the link does **not** verify anything; only
+pressing the button does. A corporate mail scanner that pre-fetches every URL
+in a message would otherwise confirm addresses on the recipient's behalf. And
+the seeded demo users are already verified, which is why you have to register
+your own account to see this flow.
+
 ### Walkthrough: you cannot see other people's money
 
 1. As **alice**, open any account and copy its id.
@@ -712,7 +839,7 @@ event, which is the only way history stays trustworthy.
 4. **404** — not 403. Bob cannot even confirm the account exists.
 
 Also notice: Bob has no **Admin** link. It is hidden in the UI, the route
-redirects, *and* the API returns 403 independently. The UI hiding it is a
+redirects, _and_ the API returns 403 independently. The UI hiding it is a
 convenience; the API refusing it is the actual security.
 
 ### Walkthrough: prove the books balance
@@ -729,7 +856,17 @@ convenience; the API refusing it is the actual security.
 Two suites, both running against a real server with real databases. No mocks:
 mocks would not catch the race conditions, and those are the interesting part.
 
-### API suite — 124 checks
+### Unit suite — 29 checks
+
+```bash
+npm run test:unit
+```
+
+Pure logic only — money parsing, pagination clamps, the password policy,
+account-number generation, and the ledger's balance invariant against a fake
+repository. No database, no server; the whole suite runs in under a second.
+
+### API suite — 170 checks
 
 ```bash
 npm run test:e2e
@@ -746,12 +883,17 @@ Covers every endpoint's happy path, plus:
 - Cross-currency transfers, self-transfers, overdrafts
 - Frozen and closed accounts
 - Idempotent replay, and the same key with a different payload
+- Verification tokens: unknown, replayed, superseded, and operator injection
+- Resend not leaking whether an address is registered
 - **Ten simultaneous identical requests** — asserts exactly one debit
 - **Five simultaneous overdraft attempts** — asserts the balance never goes negative
 - Oversized bodies, malformed JSON
 - The double-entry invariant across the database
+- Holds: reservations that do not touch the journal, double capture, capture of
+  a voided hold, and no reservation leaking once everything is settled
+- The audit trail recording who reversed what, with the reason and request id
 
-### UI suite — 12 checks
+### UI suite — 13 checks
 
 ```bash
 npm run test:ui
@@ -772,16 +914,23 @@ Both suites need a running server and seeded data (`npm run seed`).
 
 Honest scope. These are not oversights; they are next steps.
 
-- **Email verification and password reset.** The `emailVerified` field exists but
-  nothing sets it. There is no mail transport.
+- **Password reset.** The token model already supports a `PASSWORD_RESET`
+  purpose and the mock mailer is in place, so this is mostly wiring — but it is
+  not built.
+- **Real mail delivery.** Everything up to the transport is implemented; the
+  transport itself is a mock that logs instead of sending.
 - **Multi-factor authentication.**
 - **Holds and authorisations.** `availableBalance` currently tracks `balance`
-  exactly. A real card network puts a *hold* on funds at swipe time and settles
+  exactly. A real card network puts a _hold_ on funds at swipe time and settles
   later; the field is there for it but the mechanism is not.
 - **Scheduled reconciliation.** Verification is on demand. Production would run
   it continuously and page someone on a mismatch.
-- **Audit log of administrative actions.** Who reversed what, who unfroze which
-  account — currently only inferable from transaction metadata.
+- **Expired holds are not swept.** An expired hold cannot be captured, but
+  nothing releases it automatically; a background job should.
+- **Partial capture.** A hold settles in full or not at all. Card networks
+  routinely capture less than they authorised.
+- **Continuous integration.** The suites exist and pass, but nothing runs them
+  on a push yet.
 - **External settlement.** Deposits are simulated against the system account. A
   real bank receives them from a payment network via webhooks.
 - **Redis as a hard dependency.** Flushing Redis logs everyone out. Session
@@ -845,7 +994,7 @@ non-obvious and the consequence is severe.
 Others worth having ready:
 
 - **The `sanitizeFilter` trap.** Enabling Mongoose's injection protection
-  silently broke the conditional balance check, because it rewrites *legitimate*
+  silently broke the conditional balance check, because it rewrites _legitimate_
   operators too — `{ $gte: amount }` became an equality match. Security hardening
   broke a correctness guarantee, and only the concurrency test caught it. The fix
   was `mongoose.trusted()` to mark the query as first-party.
@@ -910,6 +1059,6 @@ less of a trail than the money movements do, which is backwards.
 
 ### What to be upfront about
 
-Interviewers value knowing what you did *not* do. Section 12 is the list. The
+Interviewers value knowing what you did _not_ do. Section 12 is the list. The
 strongest framing is that the gaps are deliberate and you can name what each one
 would take — which is a different thing from not having noticed them.

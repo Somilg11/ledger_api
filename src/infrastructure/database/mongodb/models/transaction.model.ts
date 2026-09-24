@@ -18,6 +18,8 @@ export interface ITransaction extends Document {
   reference?: string;
   metadata?: Record<string, unknown>;
   idempotencyKey?: string;
+  /** Set on a hold: after this the reservation can no longer be captured. */
+  expiresAt?: Date;
   createdAt: Date;
   updatedAt: Date;
   completedAt?: Date;
@@ -31,7 +33,7 @@ const TransactionSchema = new Schema<ITransaction>(
     currency: { type: String, required: true, default: 'INR', uppercase: true },
     status: {
       type: String,
-      enum: ['PENDING', 'COMPLETED', 'FAILED', 'REVERSED'],
+      enum: ['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REVERSED'],
       required: true,
       default: 'PENDING',
       index: true,
@@ -41,6 +43,7 @@ const TransactionSchema = new Schema<ITransaction>(
     reference: { type: String, maxlength: 140 },
     metadata: { type: Schema.Types.Mixed },
     idempotencyKey: { type: String },
+    expiresAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -50,5 +53,7 @@ const TransactionSchema = new Schema<ITransaction>(
 TransactionSchema.index({ idempotencyKey: 1 }, { unique: true, sparse: true });
 TransactionSchema.index({ fromAccount: 1, createdAt: -1 });
 TransactionSchema.index({ toAccount: 1, createdAt: -1 });
+// Finds holds that a sweeper should release.
+TransactionSchema.index({ status: 1, expiresAt: 1 });
 
 export const TransactionModel = model<ITransaction>('Transaction', TransactionSchema);

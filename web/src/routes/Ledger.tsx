@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { BookOpenText, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAsync } from '@/lib/useAsync';
@@ -13,23 +13,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 export function Ledger() {
   const { data: accounts, loading: loadingAccounts } = useAsync(() => api.accounts.list(), []);
-  const [accountId, setAccountId] = useState('');
+  const [chosenId, setChosenId] = useState('');
+  // Derived rather than synced: an effect that copies props into state runs a
+  // render late and can flash the wrong selection.
+  const accountId = chosenId || accounts?.[0]?._id || '';
 
-  useEffect(() => {
-    if (!accountId && accounts && accounts.length > 0) setAccountId(accounts[0]._id);
-  }, [accounts, accountId]);
-
-  const { data, error, loading } = useAsync(
-    async () => {
-      if (!accountId) return null;
-      const [entries, report] = await Promise.all([
-        api.ledger.byAccount(accountId, 100),
-        api.ledger.reconcile(accountId),
-      ]);
-      return { entries, report };
-    },
-    [accountId]
-  );
+  const { data, error, loading } = useAsync(async () => {
+    if (!accountId) return null;
+    const [entries, report] = await Promise.all([
+      api.ledger.byAccount(accountId, 100),
+      api.ledger.reconcile(accountId),
+    ]);
+    return { entries, report };
+  }, [accountId]);
 
   return (
     <div>
@@ -37,7 +33,7 @@ export function Ledger() {
         title="Ledger"
         description="The append-only journal. Entries are never edited or deleted — corrections are reversing entries."
         actions={
-          <Select value={accountId} onValueChange={setAccountId} disabled={loadingAccounts}>
+          <Select value={accountId} onValueChange={setChosenId} disabled={loadingAccounts}>
             <SelectTrigger className="w-[260px]">
               <SelectValue placeholder="Choose an account" />
             </SelectTrigger>
@@ -65,7 +61,10 @@ export function Ledger() {
         <Card className="surface-edge mb-5 gap-0 py-0">
           <CardContent className="grid gap-4 p-4 sm:grid-cols-4">
             <Stat label="Cached balance" value={formatMinor(data.report.balance, data.report.currency)} />
-            <Stat label="Ledger balance" value={formatMinor(data.report.ledgerBalance, data.report.currency)} />
+            <Stat
+              label="Ledger balance"
+              value={formatMinor(data.report.ledgerBalance, data.report.currency)}
+            />
             <Stat
               label="Debits / credits"
               value={`${formatMinor(data.report.totalDebits, data.report.currency)} / ${formatMinor(

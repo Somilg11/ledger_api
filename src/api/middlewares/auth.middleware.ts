@@ -3,9 +3,10 @@ import { authService } from '../../shared/container';
 import { TokenPayload } from '../../application/services/auth.service';
 import { Actor } from '../../application/services/account.service';
 import { UnauthorizedError, ForbiddenError } from '../../shared/errors';
+import { idOf } from './requestId.middleware';
 
 export interface AuthRequest extends Request {
-  user?: Actor & { email?: string };
+  user?: Actor;
   token?: TokenPayload;
 }
 
@@ -28,7 +29,14 @@ export function authMiddleware(requiredRoles: string[] = []) {
       const payload = await authService.verifyAccessToken(token);
 
       req.token = payload;
-      req.user = { id: payload.sub, roles: payload.roles ?? [], email: payload.email };
+      req.user = {
+        id: payload.sub,
+        roles: payload.roles ?? [],
+        email: payload.email,
+        emailVerified: payload.emailVerified,
+        requestId: idOf(req),
+        ip: req.ip,
+      };
 
       if (requiredRoles.length > 0) {
         const held = req.user.roles;

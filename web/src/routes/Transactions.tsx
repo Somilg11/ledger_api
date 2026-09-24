@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Receipt } from 'lucide-react';
+import { useState } from 'react';
+import { Ban, CheckCheck, Receipt } from 'lucide-react';
+import { toast } from 'sonner';
 import { api, type Account, type LedgerEntry, type Transaction } from '@/lib/api';
-import { useAsync } from '@/lib/useAsync';
+import { describeError, useAsync } from '@/lib/useAsync';
 import { absoluteTime, relativeTime } from '@/lib/format';
 import { EmptyState, Field, IdChip, Money, PageHeader, StatusBadge } from '@/components/primitives';
 import { Card, CardContent } from '@/components/ui/card';
@@ -11,20 +12,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
 
 export function Transactions() {
   const { data: accounts, loading: loadingAccounts } = useAsync(() => api.accounts.list(), []);
-  const [accountId, setAccountId] = useState('');
+  const [chosenId, setChosenId] = useState('');
+  // Derived rather than synced: an effect that copies props into state runs a
+  // render late and can flash the wrong selection.
+  const accountId = chosenId || accounts?.[0]?._id || '';
   const [selected, setSelected] = useState<Transaction | null>(null);
 
-  useEffect(() => {
-    if (!accountId && accounts && accounts.length > 0) setAccountId(accounts[0]._id);
-  }, [accounts, accountId]);
-
-  const { data: txns, error, loading } = useAsync(
-    async () => (accountId ? api.transactions.listByAccount(accountId, 100) : []),
-    [accountId]
-  );
+  const {
+    data: txns,
+    error,
+    loading,
+    reload,
+  } = useAsync(async () => (accountId ? api.transactions.listByAccount(accountId, 100) : []), [accountId]);
 
   const account = accounts?.find((a) => a._id === accountId);
 
@@ -34,7 +37,7 @@ export function Transactions() {
         title="Transactions"
         description="Statement for one account. Reading an account you do not own returns a 404, not a 403."
         actions={
-          <Select value={accountId} onValueChange={setAccountId} disabled={loadingAccounts}>
+          <Select value={accountId} onValueChange={setChosenId} disabled={loadingAccounts}>
             <SelectTrigger className="w-[260px]">
               <SelectValue placeholder="Choose an account" />
             </SelectTrigger>
@@ -125,7 +128,15 @@ export function Transactions() {
         </p>
       )}
 
-      <TransactionSheet transaction={selected} onOpenChange={(open) => !open && setSelected(null)} accounts={accounts ?? []} />
+      <TransactionSheet
+        transaction={selected}
+        onOpenChange={(open) => !open && setSelected(null)}
+        accounts={accounts ?? []}
+        onSettled={async (updated) => {
+          setSelected(updated);
+          await reload();
+        }}
+      />
     </div>
   );
 }
@@ -134,11 +145,33 @@ function TransactionSheet({
   transaction,
   onOpenChange,
   accounts,
+  onSettled,
 }: {
   transaction: Transaction | null;
   onOpenChange: (open: boolean) => void;
   accounts: Account[];
+  onSettled: (updated: Transaction) => Promise<void>;
 }) {
+  const [settling, setSettling] = useState(false);
+
+  async function settle(kind: 'capture' | 'void') {
+    if (!transaction) return;
+    setSettling(true);
+    try {
+      const updated =
+        kind === 'capture'
+          ? await api.transactions.capture(transaction._id)
+          : await api.transactions.voidHold(transaction._id, 'Released from the console');
+
+      toast.success(kind === 'capture' ? 'Hold captured — the money has moved' : 'Hold released');
+      await onSettled(updated);
+    } catch (err) {
+      toast.error(describeError(err));
+    } finally {
+      setSettling(false);
+    }
+  }
+
   const { data: legs, loading } = useAsync<LedgerEntry[]>(
     async () => (transaction ? api.ledger.byTransaction(transaction._id) : []),
     [transaction?._id]
@@ -179,6 +212,26 @@ function TransactionSheet({
               </Field>
             </div>
 
+            {transaction.status === 'PENDING' && (
+              <div className="border-border space-y-3 rounded-lg border border-dashed p-3">
+                <p className="text-muted-foreground text-[12px] leading-relaxed">
+                  This is a hold. The funds are reserved but have not moved, so there are no ledger entries
+                  yet. Capture settles it; voiding releases the reservation.
+                  {transaction.expiresAt && ` Expires ${absoluteTime(transaction.expiresAt)}.`}
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => void settle('capture')} disabled={settling}>
+                    <CheckCheck className="size-3.5" />
+                    Capture
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => void settle('void')} disabled={settling}>
+                    <Ban className="size-3.5" />
+                    Void
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {transaction.metadata?.reversalOf ? (
               <Alert>
                 <AlertDescription className="text-[12px]">
@@ -194,6 +247,10 @@ function TransactionSheet({
               <p className="text-muted-foreground mb-2 text-[11px] tracking-wide uppercase">Ledger entries</p>
               {loading ? (
                 <Skeleton className="h-16" />
+              ) : (legs ?? []).length === 0 ? (
+                <p className="text-muted-foreground text-[12px]">
+                  None — nothing has moved in accounting terms.
+                </p>
               ) : (
                 <ul className="divide-border divide-y">
                   {(legs ?? []).map((leg) => (
@@ -208,9 +265,7 @@ function TransactionSheet({
                       </div>
                       <div className="text-muted-foreground flex items-center justify-between text-[11px]">
                         <span className="truncate">{nameFor(leg.accountId)}</span>
-                        <span className="tabular">
-                          balance after {(leg.balanceAfter / 100).toFixed(2)}
-                        </span>
+                        <span className="tabular">balance after {(leg.balanceAfter / 100).toFixed(2)}</span>
                       </div>
                     </li>
                   ))}

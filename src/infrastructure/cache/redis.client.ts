@@ -1,5 +1,6 @@
 import Redis from 'ioredis';
 import { config } from '../../shared/config/app.config';
+import { logger } from '../../shared/logger';
 
 let redisClient: Redis | null = null;
 
@@ -15,13 +16,11 @@ export function getRedisClient(): Redis {
     });
 
     redisClient.on('connect', () => {
-      // eslint-disable-next-line no-console
-      console.log('Connected to Redis');
+      logger.info('connected to Redis');
     });
 
     redisClient.on('error', (err: Error) => {
-      // eslint-disable-next-line no-console
-      console.error('Redis error:', err.message);
+      logger.error({ err: err.message }, 'redis error');
     });
   }
   return redisClient;

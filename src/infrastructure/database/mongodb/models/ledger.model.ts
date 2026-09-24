@@ -47,9 +47,11 @@ const MUTATING_HOOKS = [
 ] as const;
 
 for (const hook of MUTATING_HOOKS) {
-  (LedgerSchema as unknown as {
-    pre: (name: string, fn: (next: (err?: Error) => void) => void) => void;
-  }).pre(hook, function (next) {
+  (
+    LedgerSchema as unknown as {
+      pre: (name: string, fn: (next: (err?: Error) => void) => void) => void;
+    }
+  ).pre(hook, function (next) {
     next(new Error('Ledger entries are immutable'));
   });
 }

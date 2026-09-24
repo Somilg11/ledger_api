@@ -1,13 +1,23 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { api, getSession, setSession, onUnauthenticated, type SessionUser } from '@/lib/api';
+import {
+  api,
+  getSession,
+  setSession,
+  onUnauthenticated,
+  type RegisterResult,
+  type SessionUser,
+} from '@/lib/api';
 
 interface AuthState {
   user: SessionUser | null;
   isAdmin: boolean;
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (input: { email: string; password: string; name?: string }) => Promise<void>;
+  /** Returns the registration result so the caller can surface the mock link. */
+  register: (input: { email: string; password: string; name?: string }) => Promise<RegisterResult>;
   logout: (allDevices?: boolean) => Promise<void>;
+  /** Re-reads the profile, e.g. after the email has been verified elsewhere. */
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -56,8 +66,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(
     async (input: { email: string; password: string; name?: string }) => {
-      await api.auth.register(input);
+      const result = await api.auth.register(input);
       await login(input.email, input.password);
+      return result;
     },
     [login]
   );
@@ -74,9 +85,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    if (!getSession()) return;
+    try {
+      const profile = await api.auth.me();
+      setUser((current) => ({ ...(current ?? profile), ...profile }));
+    } catch {
+      // A failed refresh leaves the existing profile in place.
+    }
+  }, []);
+
   const value = useMemo<AuthState>(
-    () => ({ user, isAdmin: Boolean(user?.roles?.includes('ADMIN')), ready, login, register, logout }),
-    [user, ready, login, register, logout]
+    () => ({
+      user,
+      isAdmin: Boolean(user?.roles?.includes('ADMIN')),
+      ready,
+      login,
+      register,
+      logout,
+      refreshProfile,
+    }),
+    [user, ready, login, register, logout, refreshProfile]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
