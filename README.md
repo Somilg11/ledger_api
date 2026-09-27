@@ -22,6 +22,63 @@ the one that matches the code.
 
 ---
 
+## What it looks like
+
+The console is a simulation front end for the API — every screen maps to
+endpoints, and the interesting behaviour is the system's, not the UI's.
+
+![Dashboard](docs/screenshots/02-dashboard.png)
+
+> **Watch the walkthrough** — a 77-second recording of the whole thing:
+> sign-in, a transfer with its ledger entries, an idempotent replay, a hold and
+> its capture, the journal, the admin verification and audit trail, and email
+> verification with mail mocked.
+> **[▶ Demo video](ADD_YOUR_LINK_HERE)**
+
+### Idempotency, which is the part worth understanding
+
+Submit the same transfer twice without regenerating the key. The same
+transaction comes back, the balance moves once, and both ledger legs are shown
+alongside it.
+
+![Idempotent replay](docs/screenshots/06-idempotent-replay.png)
+
+### Holds: money reserved but not moved
+
+A hold drops the available balance while the settled balance and the journal
+stay untouched — nothing has happened in accounting terms until it is captured.
+
+| Hold placed                                         | Available vs settled                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------ |
+| ![Hold placed](docs/screenshots/07-hold-placed.png) | ![Reserved balance](docs/screenshots/08-hold-reserved-balance.png) |
+
+### The journal, and proving it balances
+
+| Ledger entries                            | Admin verification and audit trail             |
+| ----------------------------------------- | ---------------------------------------------- |
+| ![Ledger](docs/screenshots/11-ledger.png) | ![Admin](docs/screenshots/12-admin-verify.png) |
+
+### Email verification, with mail mocked
+
+Nothing is delivered. The link that would have been emailed arrives as a toast,
+and opening it lands on a page laid out like the message itself — where
+pressing the button verifies, not opening the link.
+
+| The link, as a toast                                              | The message                                       |
+| ----------------------------------------------------------------- | ------------------------------------------------- |
+| ![Verification toast](docs/screenshots/13-verification-toast.png) | ![Mock email](docs/screenshots/15-mock-email.png) |
+
+### Accounts, transfers and mobile
+
+| Accounts                                      | Transfer                                             | Mobile                                    |
+| --------------------------------------------- | ---------------------------------------------------- | ----------------------------------------- |
+| ![Accounts](docs/screenshots/03-accounts.png) | ![Transfer](docs/screenshots/05-transfer-result.png) | ![Mobile](docs/screenshots/17-mobile.png) |
+
+Regenerate all of these, plus a recorded end-to-end walkthrough, with
+`npm run demo` against a running stack.
+
+---
+
 ## Quick start
 
 Everything in containers, which is the path that needs no local setup:

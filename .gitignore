@@ -37,3 +37,7 @@ coverage/
 # OS/Editor
 .DS_Store
 .vscode/
+
+# Recorded demo video: too large for git. Upload it and link to it from the
+# README instead. Regenerate with `npm run demo`.
+docs/demo/
