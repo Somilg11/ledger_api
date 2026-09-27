@@ -29,11 +29,13 @@ endpoints, and the interesting behaviour is the system's, not the UI's.
 
 ![Dashboard](docs/screenshots/02-dashboard.png)
 
-> **Watch the walkthrough** — a 77-second recording of the whole thing:
-> sign-in, a transfer with its ledger entries, an idempotent replay, a hold and
-> its capture, the journal, the admin verification and audit trail, and email
-> verification with mail mocked.
-> **[▶ Demo video](ADD_YOUR_LINK_HERE)**
+<video src="https://github.com/Somilg11/ledger_api/raw/main/docs/demo/ledger-demo.mp4" controls muted playsinline width="100%"></video>
+
+**[▶ Watch the walkthrough](docs/demo/ledger-demo.mp4)** (2:54, captioned) — a
+transfer and the ledger entries it writes, an idempotent replay, a hold
+reserved then captured, the journal, the admin verification and audit trail,
+and email verification with mail mocked. Captions explain what each step proves,
+so it stands on its own without narration.
 
 ### Idempotency, which is the part worth understanding
 

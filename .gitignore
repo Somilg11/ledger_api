@@ -38,6 +38,6 @@ coverage/
 .DS_Store
 .vscode/
 
-# Recorded demo video: too large for git. Upload it and link to it from the
-# README instead. Regenerate with `npm run demo`.
-docs/demo/
+# The recorded walkthrough is committed (it is ~2 MB), but the raw Playwright
+# capture it is encoded from is not.
+docs/demo/raw/
