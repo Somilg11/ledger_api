@@ -5,6 +5,7 @@ import { UserModel, IUser } from '../../infrastructure/database/mongodb/models/u
 import { mailer } from '../../infrastructure/email/mailer';
 import { config } from '../../shared/config/app.config';
 import { ValidationError, NotFoundError } from '../../shared/errors';
+import { logger } from '../../shared/logger';
 
 export interface IssuedLink {
   /** The raw link. Returned to callers only while mail is mocked. */
@@ -43,15 +44,25 @@ export class VerificationService {
 
     const link = `${config.appUrl}/verify-email?token=${raw}`;
 
-    await mailer.send({
-      to: user.email,
-      subject: 'Confirm your email address',
-      text:
-        `Confirm your email address to finish setting up your Ledger account.\n\n${link}\n\n` +
-        `This link expires in ${Math.round(config.emailVerification.tokenTtlSeconds / 3600)} hours ` +
-        `and can be used once. If you did not create an account, ignore this message.`,
-      actionUrl: link,
-    });
+    try {
+      await mailer.send({
+        to: user.email,
+        subject: 'Confirm your email address',
+        text:
+          `Confirm your email address to finish setting up your Ledger account.\n\n${link}\n\n` +
+          `This link expires in ${Math.round(config.emailVerification.tokenTtlSeconds / 3600)} hours ` +
+          `and can be used once. If you did not create an account, ignore this message.`,
+        actionUrl: link,
+      });
+    } catch (err) {
+      // Delivery is not allowed to fail the operation that triggered it. A
+      // provider outage - or, in a deployment with no transport configured at
+      // all, every single send - must not stop people registering. The token is
+      // already persisted and the link can be re-requested, so the only thing
+      // lost is the message itself. Logged loudly because silently never
+      // sending mail is exactly the kind of failure that hides for months.
+      logger.error({ err, to: user.email }, 'verification email could not be delivered');
+    }
 
     return { link, expiresAt };
   }
