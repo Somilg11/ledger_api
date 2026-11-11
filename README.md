@@ -61,7 +61,7 @@ This is a visual client for the real API, not a stream of all server-internal lo
 
 Interactive API reference: [Swagger UI](http://localhost:3000/docs). Health: [liveness](http://localhost:3000/health), [readiness](http://localhost:3000/ready).
 
-[Recorded walkthrough](docs/demo/ledger-demo.mp4) · [Screenshots](docs/screenshots) · [Interview and architecture guide](docs/about.md)
+[Updated captioned walkthrough](docs/demo/ledger-demo.mp4) · [Recording instructions](docs/demo/README.md) · [Screenshots](docs/screenshots) · [Interview and architecture guide](docs/about.md)
 
 ## What works
 

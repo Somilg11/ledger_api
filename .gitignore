@@ -38,8 +38,8 @@ coverage/
 .DS_Store
 .vscode/
 
-# The recorded walkthrough is committed (it is ~2 MB), but the raw Playwright
-# capture it is encoded from is not.
+# The recorded walkthrough is committed, but the raw Playwright capture it
+# is encoded from is not.
 docs/demo/raw/
 
 # Generated browser-test artifacts
