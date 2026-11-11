@@ -1,18 +1,35 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { RouteBoundary } from '@/components/RouteBoundary';
+import { LedgerLogo } from '@/components/LedgerLogo';
+import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeftRight,
   BookOpenText,
   LayoutGrid,
   LogOut,
   Receipt,
+  FlaskConical,
   ShieldCheck,
   Wallet,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Menu,
+  ChevronRight,
   type LucideIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,133 +45,241 @@ interface NavItem {
   icon: LucideIcon;
   adminOnly?: boolean;
 }
-
 const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutGrid },
+  { to: '/playground', label: 'Playground', icon: FlaskConical },
   { to: '/accounts', label: 'Accounts', icon: Wallet },
   { to: '/transfer', label: 'Move money', icon: ArrowLeftRight },
   { to: '/transactions', label: 'Transactions', icon: Receipt },
   { to: '/ledger', label: 'Ledger', icon: BookOpenText },
+  { to: '/demo', label: 'Demo guide', icon: BookOpenText },
   { to: '/admin', label: 'Admin', icon: ShieldCheck, adminOnly: true },
 ];
 
-function NavRow({ item }: { item: NavItem }) {
+function NavRow({
+  item,
+  collapsed = false,
+  onNavigate,
+}: {
+  item: NavItem;
+  collapsed?: boolean;
+  onNavigate?: () => void;
+}) {
   const Icon = item.icon;
-  return (
+  const { pathname } = useLocation();
+  const isActive = pathname === item.to || (item.to !== '/' && pathname.startsWith(`${item.to}/`));
+  const link = (
     <NavLink
       to={item.to}
       end={item.to === '/'}
-      className={({ isActive }) =>
-        cn(
-          'flex h-7 items-center gap-2 rounded-md px-2 text-[13px] transition-colors',
-          isActive
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-            : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
-        )
-      }
+      aria-label={item.label}
+      onClick={onNavigate}
+      className={cn(
+        'flex h-9 shrink-0 items-center gap-2.5 rounded-lg px-3 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        collapsed && 'size-9 justify-center gap-0 p-0',
+        isActive
+          ? 'bg-primary/12 text-primary font-medium ring-1 ring-primary/15'
+          : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
+      )}
     >
-      <Icon className="size-3.5 shrink-0 opacity-80" />
-      {item.label}
+      <Icon className="size-4 shrink-0" />
+      <span className={collapsed ? 'sr-only' : ''}>{item.label}</span>
     </NavLink>
+  );
+  return collapsed ? (
+    <Tooltip>
+      <TooltipTrigger asChild>{link}</TooltipTrigger>
+      <TooltipContent side="right">{item.label}</TooltipContent>
+    </Tooltip>
+  ) : (
+    link
   );
 }
 
 export function Layout() {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const content = useRef<HTMLElement>(null);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('ledger.sidebar-collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    content.current?.scrollTo(0, 0);
+  }, [location.pathname]);
+  useEffect(() => {
+    try {
+      localStorage.setItem('ledger.sidebar-collapsed', String(collapsed));
+    } catch {
+      /* The navigation still works without storage. */
+    }
+  }, [collapsed]);
+  const items = NAV.filter((item) => !item.adminOnly || isAdmin);
+  const title = NAV.find((item) => item.to === location.pathname)?.label ?? 'Workspace';
 
-  const initials = (user?.name || user?.email || '?').slice(0, 1).toUpperCase();
+  function signOut(all = false) {
+    void logout(all).then(() => {
+      toast.success(all ? 'Signed out of every device' : 'Signed out');
+      navigate('/login');
+    });
+  }
 
   return (
     <div className="bg-background flex h-dvh w-full overflow-hidden">
-      {/* Sidebar: Linear keeps it flush with the canvas and separates by a hairline. */}
-      <aside className="border-sidebar-border bg-sidebar hidden w-[220px] shrink-0 flex-col border-r md:flex">
+      <a
+        href="#main-content"
+        className="bg-primary text-primary-foreground fixed top-2 left-2 z-[100] -translate-y-20 rounded-md px-4 py-2 text-sm focus:translate-y-0"
+      >
+        Skip to content
+      </a>
+      <aside
+        aria-label="Desktop sidebar"
+        data-collapsed={collapsed}
+        className={cn(
+          'border-sidebar-border bg-sidebar hidden shrink-0 flex-col border-r transition-[width] duration-200 motion-reduce:transition-none md:flex',
+          collapsed ? 'w-[64px]' : 'w-[224px]'
+        )}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="hover:bg-sidebar-accent/60 m-2 flex items-center gap-2 rounded-md p-1.5 text-left transition-colors">
-              <div className="bg-primary text-primary-foreground flex size-6 shrink-0 items-center justify-center rounded text-[11px] font-semibold">
-                {initials}
+            <button
+              aria-label="Account menu"
+              className={cn(
+                'hover:bg-sidebar-accent m-3 flex min-h-10 items-center gap-2.5 rounded-lg p-1.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                collapsed && 'mx-2 justify-center'
+              )}
+            >
+              <div className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-lg shadow-sm">
+                <LedgerLogo className="size-8" />
               </div>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium">{user?.name || 'Ledger'}</p>
-                <p className="text-muted-foreground truncate text-[11px]">{user?.email}</p>
-              </div>
+              {!collapsed && (
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">Ledger</p>
+                  <p className="text-muted-foreground truncate text-[10px]">{user?.email}</p>
+                </div>
+              )}
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[212px]">
+          <DropdownMenuContent side={collapsed ? 'right' : 'bottom'} align="start" className="w-[212px]">
+            <DropdownMenuLabel className="break-all text-xs">{user?.email}</DropdownMenuLabel>
             <DropdownMenuLabel className="text-muted-foreground text-[11px] font-normal">
               {user?.roles?.join(', ') || 'USER'}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={() => {
-                void logout().then(() => {
-                  toast.success('Signed out');
-                  navigate('/login');
-                });
-              }}
-            >
+            <DropdownMenuItem onSelect={() => signOut()}>
               <LogOut className="size-3.5" />
               Log out
             </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => {
-                void logout(true).then(() => {
-                  toast.success('Signed out of every device');
-                  navigate('/login');
-                });
-              }}
-            >
+            <DropdownMenuItem onSelect={() => signOut(true)}>
               <LogOut className="size-3.5" />
               Log out everywhere
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        <nav className="flex flex-1 flex-col gap-0.5 px-2 pt-1">
-          {NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
-            <NavRow key={item.to} item={item} />
+        {!collapsed && (
+          <p className="text-muted-foreground/60 px-6 pt-4 pb-2 text-[10px] font-medium tracking-[.14em] uppercase">
+            Workspace
+          </p>
+        )}
+        <nav
+          id="desktop-navigation"
+          aria-label="Main navigation"
+          className={cn('flex flex-1 flex-col gap-1 px-3', collapsed && 'items-center px-2 pt-3')}
+        >
+          {items.map((item) => (
+            <NavRow key={item.to} item={item} collapsed={collapsed} />
           ))}
         </nav>
-
-        <div className="text-muted-foreground border-sidebar-border border-t px-3 py-2.5 text-[11px]">
-          Simulation console
-          <span className="mx-1.5 opacity-40">·</span>
-          minor units
+        <div className="border-sidebar-border space-y-2 border-t p-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              'text-muted-foreground w-full justify-start gap-2.5',
+              collapsed && 'justify-center px-0'
+            )}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!collapsed}
+            aria-controls="desktop-navigation"
+            onClick={() => setCollapsed(!collapsed)}
+          >
+            {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+            {!collapsed && <span>Collapse sidebar</span>}
+          </Button>
+          {!collapsed && (
+            <div className="text-muted-foreground/60 flex items-center gap-2 px-3 pb-1 text-[10px]">
+              <span className="bg-primary size-1.5 rounded-full" />
+              Simulation workspace
+            </div>
+          )}
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile nav: the sidebar collapses into a scrollable strip. */}
-        <div className="border-border flex gap-1 overflow-x-auto border-b px-2 py-1.5 md:hidden">
-          {NAV.filter((item) => !item.adminOnly || isAdmin).map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'shrink-0 rounded-md px-2.5 py-1.5 text-[12px] whitespace-nowrap transition-colors',
-                  isActive ? 'bg-accent text-foreground font-medium' : 'text-muted-foreground'
-                )
-              }
+        <header className="border-border/70 bg-background/95 flex h-12 shrink-0 items-center gap-3 border-b px-4 md:px-6">
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Open navigation">
+                <Menu className="size-4" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-[min(84vw,300px)] gap-2">
+              <SheetHeader>
+                <SheetTitle className="flex items-center gap-2">
+                  <LedgerLogo className="text-primary size-8" />
+                  Ledger
+                </SheetTitle>
+                <SheetDescription className="truncate">{user?.email}</SheetDescription>
+              </SheetHeader>
+              <nav aria-label="Mobile navigation" className="flex flex-col gap-1 px-3">
+                {items.map((item) => (
+                  <NavRow key={item.to} item={item} onNavigate={() => setMobileOpen(false)} />
+                ))}
+              </nav>
+            </SheetContent>
+          </Sheet>
+          <span className="text-muted-foreground hidden text-xs sm:inline">Workspace</span>
+          <ChevronRight className="text-muted-foreground/40 hidden size-3 sm:block" />
+          <span className="truncate text-xs font-medium">{title}</span>
+          <div className="ml-auto flex items-center gap-3">
+            <span className="text-muted-foreground hidden items-center gap-1.5 text-[10px] sm:flex">
+              <span className="bg-primary size-1.5 rounded-full" />
+              Simulated money
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="md:hidden"
+              aria-label="Log out"
+              onClick={() => signOut()}
             >
-              {item.label}
-            </NavLink>
-          ))}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto shrink-0"
-            onClick={() => void logout().then(() => navigate('/login'))}
+              <LogOut className="size-4" />
+            </Button>
+          </div>
+        </header>
+        <main
+          id="main-content"
+          ref={content}
+          tabIndex={-1}
+          className={cn(
+            'relative min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none',
+            location.pathname === '/playground' && 'playground-shell xl:overflow-hidden'
+          )}
+        >
+          <div
+            className={cn(
+              'mx-auto w-full px-4 py-6 md:px-6 md:py-7',
+              location.pathname === '/playground' ? 'max-w-[1800px] xl:h-full xl:py-4' : 'max-w-6xl'
+            )}
           >
-            <LogOut className="size-3.5" />
-          </Button>
-        </div>
-
-        <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-6xl px-4 py-6 md:px-8 md:py-8">
-            <Outlet />
+            <RouteBoundary>
+              <Outlet />
+            </RouteBoundary>
           </div>
         </main>
       </div>

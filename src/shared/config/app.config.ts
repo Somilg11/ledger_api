@@ -38,15 +38,13 @@ export const config = {
   env: NODE_ENV,
   isProduction,
   port: intEnv('PORT', 3000),
-  mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27017/ledger',
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  mongoUri: process.env.MONGO_URI || 'mongodb://localhost:27018/ledger?replicaSet=rs0&directConnection=true',
+  redisUrl: process.env.REDIS_URL || 'redis://localhost:6380',
 
   // Access and refresh tokens are signed with different keys so an access
   // token can never be replayed as a refresh token.
   jwtSecret: requiredSecret('JWT_SECRET'),
-  jwtRefreshSecret: process.env.JWT_REFRESH_SECRET
-    ? requiredSecret('JWT_REFRESH_SECRET')
-    : requiredSecret('JWT_SECRET') + ':refresh',
+  jwtRefreshSecret: requiredSecret('JWT_REFRESH_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '15m',
   refreshTokenExpiresIn: process.env.REFRESH_EXPIRES_IN || '7d',
   jwtIssuer: process.env.JWT_ISSUER || 'ledger-api',

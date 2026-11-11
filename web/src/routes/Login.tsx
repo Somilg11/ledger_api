@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { Landmark } from 'lucide-react';
+import { LedgerLogo } from '@/components/LedgerLogo';
 import { toast } from 'sonner';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth-context';
 import { describeError } from '@/lib/useAsync';
-import { toastVerificationLink } from '@/components/verification';
+import { toastVerificationLink } from '@/components/toast-verification';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -46,19 +46,23 @@ export function Login() {
   }
 
   return (
-    <div className="bg-background flex min-h-dvh items-center justify-center px-4">
-      <div className="w-full max-w-[360px]">
+    <div className="bg-background flex h-dvh items-center justify-center overflow-y-auto px-4 py-8">
+      <div className="my-auto w-full max-w-[360px]">
         <div className="mb-7 flex flex-col items-center gap-3 text-center">
           <div className="bg-primary text-primary-foreground flex size-9 items-center justify-center rounded-lg">
-            <Landmark className="size-4" />
+            <LedgerLogo className="size-8" />
           </div>
           <div className="space-y-1">
-            <h1 className="text-[15px] font-semibold tracking-tight">Ledger Console</h1>
+            <h1 className="text-[15px] font-semibold tracking-tight">Ledger</h1>
             <p className="text-muted-foreground text-[12px]">
               Simulation front end for the double-entry banking API
             </p>
           </div>
         </div>
+
+        <Link to="/demo" className="text-primary mb-5 block text-center text-sm underline underline-offset-4">
+          View demo guide and credentials
+        </Link>
 
         <Tabs value={mode} onValueChange={setMode}>
           <TabsList className="grid w-full grid-cols-2">

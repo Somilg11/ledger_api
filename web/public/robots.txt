@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /demo
+Disallow: /api/
+Disallow: /login
+Disallow: /playground
+Disallow: /accounts
+Disallow: /transfer
+Disallow: /transactions
+Disallow: /ledger
+Disallow: /admin
+Disallow: /verify-email

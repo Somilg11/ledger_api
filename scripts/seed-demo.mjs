@@ -12,14 +12,15 @@ const BASE = process.env.BASE_URL || 'http://localhost:3000';
 // directConnection bypasses replica-set discovery. The set advertises
 // itself as `mongo:27017`, which only resolves inside the Docker network,
 // so a host-side driver must talk to the node directly.
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ledger?directConnection=true';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27018/ledger?directConnection=true';
 const PASSWORD = process.env.DEMO_PASSWORD || 'Sup3rStrong!Pass';
 
-async function call(method, path, { token, body } = {}) {
+async function call(method, path, { token, body, idempotencyKey } = {}) {
   const res = await fetch(`${BASE}/api/v1${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
+      ...(idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -78,7 +79,7 @@ async function main() {
   await client.connect();
   const users = client.db().collection('users');
   await users.updateOne(
-    { email: 'admin@example.com' },
+    { email: 'admin@example.com', roles: { $ne: 'ADMIN' } },
     { $addToSet: { roles: 'ADMIN' }, $inc: { tokenVersion: 1 } }
   );
   await users.updateMany(
@@ -119,13 +120,14 @@ async function main() {
     call('POST', '/transactions/deposit', {
       token: session.accessToken,
       body: { accountId, amount, reference },
+      idempotencyKey: `seed-v1-deposit-${accountId}`,
     });
 
   await fund(alice, aliceSavings._id, 2_500_00, 'Salary');
   await fund(alice, aliceWallet._id, 300_00, 'Wallet top-up');
   await fund(alice, aliceUsd._id, 450_00, 'Forex purchase');
   await fund(bob, bobSavings._id, 1_200_00, 'Salary');
-  console.log('  funded accounts');
+  console.log('  ensured demo funding (existing payment keys are reused)');
 
   const traffic = [
     [alice, aliceSavings._id, aliceWallet._id, 250_00, 'Move to spending'],
@@ -138,14 +140,16 @@ async function main() {
     await call('POST', '/transactions', {
       token: session.accessToken,
       body: { fromAccount: from, toAccount: to, amount, reference },
+      idempotencyKey: `seed-v1-transfer-${from}-${to}`,
     });
   }
 
   await call('POST', '/transactions/withdraw', {
     token: bob.accessToken,
     body: { accountId: bobSavings._id, amount: 200_00, reference: 'ATM' },
+    idempotencyKey: `seed-v1-withdraw-${bobSavings._id}`,
   });
-  console.log('  created transfers and a withdrawal');
+  console.log('  ensured example transfers and withdrawal');
 
   const verify = await call('GET', '/ledger/verify', { token: adminSession.accessToken });
   console.log(

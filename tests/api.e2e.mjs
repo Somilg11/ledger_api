@@ -8,12 +8,14 @@
  * Usage:  BASE_URL=http://localhost:3000 MONGO_URI=... node tests/api.e2e.mjs
  */
 import { MongoClient } from 'mongodb';
+import Redis from 'ioredis';
+import { createHash } from 'node:crypto';
 
 const BASE = process.env.BASE_URL || 'http://localhost:3000';
 // directConnection bypasses replica-set discovery. The set advertises
 // itself as `mongo:27017`, which only resolves inside the Docker network,
 // so a host-side driver must talk to the node directly.
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/ledger?directConnection=true';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27018/ledger?directConnection=true';
 
 let passed = 0;
 let failed = 0;
@@ -233,6 +235,7 @@ async function run() {
       mine.status === 200 && mine.body.data.email === alice.email,
       mine.body
     );
+    check('authenticated responses cannot be cached', mine.headers.get('cache-control') === 'no-store');
     check('profile omits the password hash', !JSON.stringify(mine.body).includes('passwordHash'));
   }
 
@@ -634,6 +637,45 @@ async function run() {
       differentBody.body
     );
 
+    // Remove only this request's replay state, simulating cache expiry without
+    // flushing session/rate-limit data or touching other callers.
+    const redis = new Redis(process.env.REDIS_URL || 'redis://127.0.0.1:6380');
+    try {
+      const caller = JSON.parse(Buffer.from(alice.token.split('.')[1], 'base64url').toString()).sub;
+      const hash = createHash('sha256')
+        .update([caller, 'POST', '/api/v1/transactions/', key, JSON.stringify(body)].join('\n'))
+        .digest('hex');
+      // Express represents the mounted root route as /transactions/.
+      const ownerKey = `idemp:owner:${caller}:${key}`;
+      await redis.del(ownerKey, `idemp:res:${hash}`);
+      const uncachedReplay = await call('POST', '/api/v1/transactions', {
+        token: alice.token,
+        body,
+        headers: { 'X-Idempotency-Key': key },
+      });
+      check(
+        'durable idempotency returns the original after cache expiry',
+        uncachedReplay.status === 201 &&
+          uncachedReplay.body?.data?._id === first.body?.data?._id &&
+          uncachedReplay.headers.get('X-Idempotent-Replay') !== 'true',
+        uncachedReplay.body
+      );
+      await redis.del(ownerKey);
+      const uncachedConflict = await call('POST', '/api/v1/transactions', {
+        token: alice.token,
+        body: { ...body, amount: 999_00 },
+        headers: { 'X-Idempotency-Key': key },
+      });
+      check(
+        'durable fingerprint rejects a changed payload after cache expiry',
+        uncachedConflict.status === 409,
+        uncachedConflict.body
+      );
+      await redis.del(ownerKey);
+    } finally {
+      await redis.quit();
+    }
+
     const bobReuse = await call('POST', '/api/v1/transactions', {
       token: bob.token,
       body: { fromAccount: bob.account, toAccount: alice.account, amount: 100 },
@@ -994,6 +1036,30 @@ async function run() {
       token: admin.token,
     });
     check('a transaction cannot be reversed twice', again.status === 409, again.body);
+
+    const payment = await call('POST', '/api/v1/transactions', {
+      token: alice.token,
+      body: { fromAccount: alice.account, toAccount: bob.account, amount: 100 },
+    });
+    check('creates a payment for the reversal race', payment.status === 201, payment.body);
+    const beforeRace = (await call('GET', `/api/v1/accounts/${bob.account}/balance`, { token: bob.token }))
+      .body.data.balance;
+    const race = await Promise.all(
+      Array.from({ length: 5 }, () =>
+        call('POST', `/api/v1/transactions/${payment.body.data._id}/reverse`, { token: admin.token })
+      )
+    );
+    check(
+      'simultaneous reversals commit exactly once',
+      race.filter((r) => r.status === 201).length === 1 && race.filter((r) => r.status === 409).length === 4,
+      race.map((r) => r.status)
+    );
+    const afterRace = (await call('GET', `/api/v1/accounts/${bob.account}/balance`, { token: bob.token }))
+      .body.data.balance;
+    check('the reversal race refunds exactly once', beforeRace - afterRace === 100, {
+      beforeRace,
+      afterRace,
+    });
   }
 
   section('GET /api/v1/admin/audit-logs');

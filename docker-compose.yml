@@ -16,7 +16,7 @@ services:
     container_name: ledger-mongo
     command: ['mongod', '--replSet', 'rs0', '--bind_ip_all']
     ports:
-      - '27017:27017'
+      - '127.0.0.1:${LEDGER_MONGO_PORT:-27018}:27017'
     volumes:
       - mongo-data:/data/db
     healthcheck:
@@ -36,7 +36,7 @@ services:
     container_name: ledger-redis
     command: ['redis-server', '--appendonly', 'yes', '--save', '60', '1']
     ports:
-      - '6379:6379'
+      - '127.0.0.1:${LEDGER_REDIS_PORT:-6380}:6379'
     volumes:
       - redis-data:/data
     healthcheck:
@@ -52,7 +52,7 @@ services:
       dockerfile: Dockerfile
     container_name: ledger-api
     ports:
-      - '3000:3000'
+      - '127.0.0.1:3000:3000'
     environment:
       NODE_ENV: development
       PORT: '3000'

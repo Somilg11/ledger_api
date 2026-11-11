@@ -18,11 +18,12 @@ export interface ITransaction extends Document {
   reference?: string;
   metadata?: Record<string, unknown>;
   idempotencyKey?: string;
+  requestFingerprint?: string;
   /** Set on a hold: after this the reservation can no longer be captured. */
   expiresAt?: Date;
+  completedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
-  completedAt?: Date;
 }
 
 const TransactionSchema = new Schema<ITransaction>(
@@ -43,7 +44,9 @@ const TransactionSchema = new Schema<ITransaction>(
     reference: { type: String, maxlength: 140 },
     metadata: { type: Schema.Types.Mixed },
     idempotencyKey: { type: String },
+    requestFingerprint: { type: String },
     expiresAt: { type: Date },
+    completedAt: { type: Date },
   },
   { timestamps: true }
 );

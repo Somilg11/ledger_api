@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Inbox, Landmark, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
 import { describeError } from '@/lib/useAsync';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -61,8 +61,8 @@ export function VerifyEmail() {
   }
 
   return (
-    <div className="bg-background flex min-h-dvh items-center justify-center px-4 py-10">
-      <div className="w-full max-w-[520px]">
+    <div className="bg-background flex h-dvh items-center justify-center overflow-y-auto px-4 py-10">
+      <div className="my-auto w-full max-w-[520px]">
         {/* The envelope: who it is from, and that nothing was really sent. */}
         <div className="text-muted-foreground mb-3 flex items-center gap-2 px-1 text-[11px]">
           <Inbox className="size-3.5" />

@@ -136,11 +136,22 @@ export class AccountService {
     if (account.status === 'FROZEN' && status === 'ACTIVE' && !isAdmin(actor)) {
       throw new ForbiddenError('Only an administrator can unfreeze an account');
     }
-    if (status === 'CLOSED' && account.balance !== 0) {
+    if (status === 'CLOSED' && (account.balance !== 0 || account.availableBalance !== 0)) {
       throw new ConflictError('Account must have a zero balance before it can be closed');
     }
 
-    const updated = await this.repo.updateMutableFields(accountId, { status });
+    // Include the current status and zero-balance condition in the write itself.
+    // A concurrent deposit, hold, or status change must not close a funded account.
+    const updated = await AccountModel.findOneAndUpdate(
+      {
+        _id: accountId,
+        status: account.status,
+        ...(status === 'CLOSED' ? { balance: 0, availableBalance: 0 } : {}),
+      },
+      { $set: { status } },
+      { new: true, runValidators: true }
+    ).exec();
+    if (!updated) throw new ConflictError('Account changed during this request; refresh and retry');
 
     // Only staff actions are audited. A user freezing their own account is
     // ordinary self-service; an operator doing it to someone else is not.

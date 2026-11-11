@@ -26,6 +26,11 @@ const app = express();
 // spoofable when it is enabled blindly. Configure the exact hop count instead.
 app.set('trust proxy', config.trustProxy);
 app.disable('x-powered-by');
+app.disable('etag');
+app.use('/api', (_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
 
 app.use(helmet());
 app.use(

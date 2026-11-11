@@ -2,46 +2,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MailCheck, MailWarning } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, type MockVerification } from '@/lib/api';
+import { api } from '@/lib/api';
 import { describeError } from '@/lib/useAsync';
-import { useAuth } from '@/lib/auth';
+import { useAuth } from '@/lib/auth-context';
+import { toastVerificationLink } from '@/components/toast-verification';
 import { Button } from '@/components/ui/button';
-
-/**
- * Shows the link that a real deployment would have emailed.
- *
- * The API only returns it while mail is mocked, so there is nothing to show in
- * production — and nothing to leak.
- */
-export function toastVerificationLink(verification: MockVerification | undefined, title: string) {
-  if (!verification) {
-    // Either mail is really being delivered, or the address was not eligible.
-    // Either way the honest message is the same one a real system would give.
-    toast.success(title, {
-      description: 'If that address needs verifying, a link is on its way.',
-    });
-    return;
-  }
-
-  toast.success(title, {
-    description: (
-      <div className="space-y-2">
-        <p>Mail is mocked, so the link is here instead. Copy it and open it in a new tab.</p>
-        <code className="bg-muted text-muted-foreground block max-w-full overflow-x-auto rounded border px-2 py-1 font-mono text-[10px] whitespace-nowrap">
-          {verification.link}
-        </code>
-      </div>
-    ),
-    action: {
-      label: 'Copy',
-      onClick: () => {
-        void navigator.clipboard.writeText(verification.link);
-        toast.success('Link copied');
-      },
-    },
-    duration: 60_000,
-  });
-}
 
 /** Prompts an unverified user and can re-issue the link. */
 export function UnverifiedBanner() {

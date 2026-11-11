@@ -3,19 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Ledger Console</title>
-    <link
-      rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%235e6ad2'/%3E%3Cpath d='M9 22V10m0 12h14' stroke='white' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E"
+    <title>Ledger</title>
+    <link rel="icon" type="image/svg+xml" href="/ledger.svg" />
+    <meta
+      name="description"
+      content="Explore Ledger, an interactive double-entry banking simulation with safe transfers, holds, reversals, and a live money network."
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
+    <meta name="robots" content="noindex,nofollow" />
+    <meta name="theme-color" content="#0d0d12" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Ledger" />
+    <meta property="og:title" content="Ledger · Banking and Money Movement Simulation" />
+    <meta
+      property="og:description"
+      content="Follow simulated money through accounts, atomic payments, and a balanced journal."
+    />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Ledger · Banking Simulation" />
+    <meta
+      name="twitter:description"
+      content="A hands-on double-entry ledger with an interactive money network."
     />
   </head>
   <body>
+    <noscript
+      >Ledger needs JavaScript for its interactive banking simulation. No real money is processed.</noscript
+    >
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

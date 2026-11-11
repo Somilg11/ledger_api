@@ -1,0 +1,43 @@
+name: Ledger checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            web/package-lock.json
+      - run: npm ci
+      - run: npm --prefix web ci
+      - run: npm run check
+      - run: npm run demo:up
+      - run: npm run test:e2e
+      - run: npm run test:ui
+        env:
+          BASE_URL: http://localhost:8080
+          CHROME_PATH: /usr/bin/google-chrome
+      - run: npm run test:responsive
+        env:
+          BASE_URL: http://localhost:8080
+          CHROME_PATH: /usr/bin/google-chrome
+      - name: Container logs
+        if: failure()
+        run: docker compose --profile web logs --no-color
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-screenshots
+          path: web/tests/screenshots/
+      - name: Stop stack
+        if: always()
+        run: docker compose --profile web down

@@ -58,6 +58,9 @@ export function Dashboard() {
         actions={
           <>
             <VerifiedBadge />
+            <Button asChild size="sm" variant="outline">
+              <Link to="/playground">Open playground</Link>
+            </Button>
             <Button asChild size="sm">
               <Link to="/transfer">Move money</Link>
             </Button>

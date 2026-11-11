@@ -1,12 +1,12 @@
-# Ledger Console
+# Ledger
 
 Simulation front end for the Ledger API. React 19 + Vite + Tailwind v4 +
-shadcn/ui, themed after Linear: near-black canvas, hairline borders instead of
+shadcn/Radix UI, themed after Linear: near-black canvas, hairline borders instead of
 shadows, one indigo accent, 13px interface type and 6px radii.
 
 ```bash
-npm install
-npm run dev        # http://localhost:5173
+npm ci
+npm run dev   # http://localhost:5173/demo
 ```
 
 The dev server proxies `/api`, `/health` and `/ready` to
@@ -17,7 +17,7 @@ VITE_API_TARGET=http://127.0.0.1:3177 npm run dev
 ```
 
 Against the containerised stack, the console is already built and served by
-nginx on **http://localhost:8080** — `npm run stack:up` from the repo root.
+nginx on **http://localhost:8080** — `npm run demo:up` from the repo root.
 
 Proxying means the browser only ever talks to one origin, so the API's
 deny-by-default CORS policy needs no exception. The container build does the
@@ -25,16 +25,18 @@ same thing with nginx.
 
 ## Screens
 
-| Route           | What it does                                                                                              |
-| --------------- | --------------------------------------------------------------------------------------------------------- |
-| `/login`        | Sign in or register. Surfaces the API's password policy.                                                  |
-| `/`             | Balances per currency, account list, merged activity feed, reconciliation status.                         |
-| `/accounts`     | Open, rename, freeze and close accounts; per-account ledger reconciliation.                               |
-| `/transfer`     | Transfer, deposit and withdraw, with a live idempotency-key control.                                      |
-| `/transactions` | Statement per account; a detail sheet shows both ledger legs.                                             |
-| `/ledger`       | The append-only journal, with cached vs ledger balance side by side.                                      |
-| `/admin`        | System-wide debits==credits check, transaction reversal, account unfreeze. Admin only.                    |
-| `/verify-email` | A mock of the verification message, with a Verify button. Public — the link is opened from a mail client. |
+| Route           | What it does                                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `/playground`   | Responsive data-flow diagram, live account balances, transfer/hold/capture/void experiments, safe retry, and request timeline. |
+| `/demo`         | Guided scenarios, dependency status, and demo credentials with manual sign-in.                                                 |
+| `/login`        | Sign in or register. Surfaces the API's password policy.                                                                       |
+| `/`             | Balances per currency, account list, merged activity feed, reconciliation status.                                              |
+| `/accounts`     | Open, rename, freeze and close accounts; per-account ledger reconciliation.                                                    |
+| `/transfer`     | Transfer, deposit, withdraw and authorize holds, with a live idempotency-key control.                                          |
+| `/transactions` | Statement per account; a detail sheet shows both ledger legs.                                                                  |
+| `/ledger`       | The append-only journal, with cached vs ledger balance side by side.                                                           |
+| `/admin`        | System-wide debits==credits check, transaction reversal, account unfreeze, audit log. Admin only.                              |
+| `/verify-email` | A mock of the verification message, with a Verify button. Public — the link is opened from a mail client.                      |
 
 ## Things worth clicking
 
@@ -50,7 +52,7 @@ same thing with nginx.
   balance moves once. Change the amount but keep the key and the API returns
   409 by design — the form then offers to rotate the key.
 - **Reconciliation.** Every balance is shown next to the sum of the journal.
-  `reconciled: false` would mean the cached balance drifted from the ledger.
+  `reconciled: false` signals a mismatch; concurrent reads can also require a fresh check.
 - **Authorisation.** The Admin link is hidden for normal users, and the route
   redirects; the API independently returns 403. Reading an account you do not
   own returns 404, so account ids cannot be probed.
@@ -65,6 +67,8 @@ npm run test:ui     # works from web/ or from the repo root
 a type check cannot: that displayed money matches what the API holds, that an
 idempotent replay moves money only once (it reads the balance before and after),
 and that a normal user never reaches the admin surface.
+
+Additional mobile/desktop, cache-header, session-isolation, and route-recovery checks run with `npm run test:responsive`.
 
 It probes :5173 and :8080 and uses whichever is serving, so it works against the
 dev server or the container without configuration. Override with `BASE_URL`, and
@@ -91,3 +95,7 @@ src/
 │   └── primitives.tsx  Money, StatusBadge, IdChip, EmptyState, PageHeader
 └── routes/           one file per screen
 ```
+
+The public `/demo` guide lists demo credentials. Users must enter them on the sign-in form; the guide never authenticates or switches accounts. Use the root [README](../README.md) for backend setup and the [architecture guide](../docs/about.md) for tradeoffs.
+
+The sidebar collapses on desktop and uses a shadcn drawer on mobile. Routes load lazily behind render error boundaries. Fonts are self-hosted, and built nginx responses include CSP and cache headers. Browser tokens live in tab-scoped sessionStorage; this still requires XSS protection.

@@ -60,17 +60,17 @@ export function idempotencyMiddleware(req: IdempotentRequest, res: Response, nex
 
     // Same key, different payload: the client has a bug and must not be given
     // a response that does not match what it just asked for.
+    await cache.setIfNotExists(ownerKey, hash, RESPONSE_TTL_SECONDS);
     const previousHash = await cache.get(ownerKey);
     if (previousHash && previousHash !== hash) {
       throw new ConflictError('This idempotency key was already used with a different request payload');
     }
 
-    const acquired = await cache.setIfNotExists(lockKey, '1', LOCK_TTL_SECONDS);
+    const lockToken = crypto.randomUUID();
+    const acquired = await cache.setIfNotExists(lockKey, lockToken, LOCK_TTL_SECONDS);
     if (!acquired) {
       throw new ConflictError('A request with this idempotency key is already in flight');
     }
-
-    await cache.set(ownerKey, hash, RESPONSE_TTL_SECONDS);
 
     const originalJson = res.json.bind(res);
     let stored = false;
@@ -90,8 +90,8 @@ export function idempotencyMiddleware(req: IdempotentRequest, res: Response, nex
     // The lock is released once the response is fully written, including on
     // error paths and aborted connections - otherwise a crash would block the
     // key for the whole lock TTL.
-    res.on('finish', () => void cache.del(lockKey).catch(() => undefined));
-    res.on('close', () => void cache.del(lockKey).catch(() => undefined));
+    res.on('finish', () => void cache.delIfValue(lockKey, lockToken).catch(() => undefined));
+    res.on('close', () => void cache.delIfValue(lockKey, lockToken).catch(() => undefined));
 
     next();
   })().catch(next);

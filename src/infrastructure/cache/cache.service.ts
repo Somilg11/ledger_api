@@ -19,6 +19,16 @@ export class CacheService {
     await this.redis.del(key);
   }
 
+  /** Release only the lock we acquired, never a successor after our TTL expired. */
+  async delIfValue(key: string, value: string): Promise<void> {
+    await this.redis.eval(
+      "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+      1,
+      key,
+      value
+    );
+  }
+
   async exists(key: string): Promise<boolean> {
     const result = await this.redis.exists(key);
     return result === 1;
@@ -33,10 +43,11 @@ export class CacheService {
   }
 
   async setIfNotExists(key: string, value: string, ttlSeconds?: number): Promise<boolean> {
-    const result = await this.redis.setnx(key, value);
-    if (result === 1 && ttlSeconds) {
-      await this.redis.expire(key, ttlSeconds);
+    // Acquire and expire atomically: a crash between SETNX and EXPIRE must
+    // never leave a permanent lock.
+    if (ttlSeconds) {
+      return (await this.redis.set(key, value, 'EX', ttlSeconds, 'NX')) === 'OK';
     }
-    return result === 1;
+    return (await this.redis.setnx(key, value)) === 1;
   }
 }

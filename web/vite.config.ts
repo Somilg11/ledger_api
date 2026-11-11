@@ -10,6 +10,16 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          react: ['react', 'react-dom', 'react-router-dom'],
+          ui: ['radix-ui', 'lucide-react', 'sonner'],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     // Proxying means the browser only ever talks to one origin, so the API's

@@ -21,5 +21,6 @@ USER node
 COPY --chown=node:node --from=deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=build /app/dist ./dist
 COPY --chown=node:node package*.json ./
+COPY --chown=node:node scripts/seed-demo.mjs ./scripts/seed-demo.mjs
 EXPOSE 3000
 CMD ["node", "dist/server.js"]

@@ -8,6 +8,10 @@ import { config } from '../../shared/config/app.config';
 import { ConflictError, UnauthorizedError, ForbiddenError } from '../../shared/errors';
 import { assertStrongPassword } from '../../shared/utils/password';
 
+// A valid bcrypt hash makes unknown-user checks perform the configured work
+// factor too. An invalid placeholder hash can return immediately.
+const dummyPasswordHash = bcrypt.hashSync('ledger-login-timing-guard', config.bcryptRounds);
+
 // Re-exported so existing imports keep working.
 export { assertStrongPassword };
 
@@ -137,7 +141,7 @@ export class AuthService {
     if (!user) {
       // Hash a dummy value so a missing user takes the same time as a wrong
       // password - otherwise response timing enumerates valid emails.
-      await bcrypt.compare(password, '$2b$12$invalidinvalidinvalidinvalidinvalidinvalidinvalidinvalidinv');
+      await bcrypt.compare(password, dummyPasswordHash);
       throw new UnauthorizedError('Invalid credentials');
     }
 
@@ -169,7 +173,14 @@ export class AuthService {
       accessToken,
       refreshToken,
       expiresIn: ttlSeconds(config.jwtExpiresIn),
-      user: { id: sub, email: user.email, name: user.name, roles: user.roles, status: user.status },
+      user: {
+        id: sub,
+        email: user.email,
+        name: user.name,
+        roles: user.roles,
+        status: user.status,
+        emailVerified: user.emailVerified,
+      },
     };
   }
 

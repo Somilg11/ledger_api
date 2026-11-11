@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { Check, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatMinor } from '@/lib/money';
@@ -22,7 +23,7 @@ export function PageHeader({
         <h1 className="text-[15px] font-semibold tracking-tight">{title}</h1>
         {description && <p className="text-muted-foreground max-w-prose text-[13px]">{description}</p>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && <div className="flex max-w-full flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
@@ -90,10 +91,14 @@ export function IdChip({ id, label }: { id?: string; label?: string }) {
   return (
     <button
       type="button"
-      onClick={() => {
-        void navigator.clipboard.writeText(id);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1200);
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(id);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        } catch {
+          toast.error('Copy failed. Select the transaction ID to copy it manually.');
+        }
       }}
       className="text-muted-foreground hover:text-foreground hover:border-border group inline-flex items-center gap-1.5 rounded border border-transparent px-1.5 py-0.5 font-mono text-[11px] transition-colors"
       title={id}

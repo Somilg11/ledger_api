@@ -84,7 +84,7 @@ await context.addInitScript(() => {
           border: '1px solid rgba(255,255,255,0.10)',
           boxShadow: '0 8px 30px rgba(0,0,0,0.45)',
           color: '#f7f8f8',
-          font: "500 17px/1.45 Inter, ui-sans-serif, system-ui, sans-serif",
+          font: '500 17px/1.45 Inter, ui-sans-serif, system-ui, sans-serif',
           letterSpacing: '-0.01em',
           textAlign: 'center',
           textWrap: 'balance',
@@ -286,7 +286,7 @@ await scene('Admin', async () => {
   await page.locator('aside button').first().click();
   await beat(700);
   await page.getByRole('menuitem', { name: 'Log out', exact: true }).click();
-  await page.getByRole('heading', { name: 'Ledger Console' }).waitFor({ timeout: 10_000 });
+  await page.getByRole('heading', { name: 'Ledger' }).waitFor({ timeout: 10_000 });
   await beat(900);
 
   await page.getByLabel('Email').pressSequentially('admin@example.com', { delay: 35 });
@@ -312,7 +312,7 @@ await scene('Email verification', async () => {
   await page.locator('aside button').first().click();
   await beat(600);
   await page.getByRole('menuitem', { name: 'Log out', exact: true }).click();
-  await page.getByRole('heading', { name: 'Ledger Console' }).waitFor({ timeout: 10_000 });
+  await page.getByRole('heading', { name: 'Ledger' }).waitFor({ timeout: 10_000 });
 
   await caption('Registering a new account, to show email verification.', 3000);
   await page.getByRole('tab', { name: 'Create account' }).click();
@@ -389,16 +389,23 @@ execFileSync(
   'ffmpeg',
   [
     '-y',
-    '-i', source,
+    '-i',
+    source,
     // H.264 + yuv420p is the combination that plays everywhere, including
     // Google Drive's preview and QuickTime.
-    '-c:v', 'libx264',
-    '-pix_fmt', 'yuv420p',
-    '-crf', '23',
-    '-preset', 'slow',
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-crf',
+    '23',
+    '-preset',
+    'slow',
     // Even dimensions are required by yuv420p.
-    '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
-    '-movflags', '+faststart',
+    '-vf',
+    'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+    '-movflags',
+    '+faststart',
     target,
   ],
   { stdio: 'ignore' }

@@ -150,8 +150,24 @@ export interface StoredSession {
 
 export function loadSession(): StoredSession | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as StoredSession) : null;
+    // Remove the legacy persistent token copy; sessions are now scoped to a tab.
+    localStorage.removeItem(STORAGE_KEY);
+    const raw = sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<StoredSession>;
+    if (
+      typeof value.accessToken !== 'string' ||
+      typeof value.refreshToken !== 'string' ||
+      !value.user ||
+      typeof value.user.id !== 'string' ||
+      typeof value.user.email !== 'string' ||
+      !Array.isArray(value.user.roles) ||
+      !value.user.roles.every((role) => typeof role === 'string')
+    ) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return value as StoredSession;
   } catch {
     return null;
   }
@@ -159,8 +175,9 @@ export function loadSession(): StoredSession | null {
 
 export function saveSession(session: StoredSession | null) {
   try {
-    if (session) localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-    else localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
+    if (session) sessionStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(STORAGE_KEY);
   } catch {
     // Private-browsing mode; the session simply does not survive a reload.
   }
@@ -204,6 +221,7 @@ let refreshInFlight: Promise<boolean> | null = null;
  */
 async function refreshTokens(): Promise<boolean> {
   if (!session) return false;
+  const originalSession = session;
   if (refreshInFlight) return refreshInFlight;
 
   refreshInFlight = (async () => {
@@ -211,13 +229,20 @@ async function refreshTokens(): Promise<boolean> {
       const res = await fetch(`${BASE}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken: session!.refreshToken }),
+        body: JSON.stringify({ refreshToken: originalSession.refreshToken }),
+        signal: AbortSignal.timeout(15_000),
       });
-      if (!res.ok) return false;
+      if (!res.ok || session !== originalSession) return false;
 
       const payload = await res.json();
+      if (
+        session !== originalSession ||
+        typeof payload.data?.accessToken !== 'string' ||
+        typeof payload.data?.refreshToken !== 'string'
+      )
+        return false;
       setSession({
-        ...session!,
+        ...originalSession,
         accessToken: payload.data.accessToken,
         refreshToken: payload.data.refreshToken,
       });
@@ -232,29 +257,112 @@ async function refreshTokens(): Promise<boolean> {
   return refreshInFlight;
 }
 
+/** Browser-visible request metadata only: never bodies, credentials, or tokens. */
+export interface ApiTrace {
+  id: string;
+  phase: 'request' | 'response' | 'network-error';
+  method: string;
+  path: string;
+  time: number;
+  status?: number;
+  durationMs?: number;
+  requestId?: string;
+}
+
+const traceListeners = new Set<(event: ApiTrace) => void>();
+export function subscribeApiTrace(listener: (event: ApiTrace) => void): () => void {
+  traceListeners.add(listener);
+  return () => {
+    traceListeners.delete(listener);
+  };
+}
+
+function trace(event: ApiTrace) {
+  if (event.path.startsWith('/auth/')) return;
+  for (const listener of traceListeners) {
+    // Observability must never change whether a payment succeeds.
+    try {
+      listener(event);
+    } catch {
+      /* Ignore a failed observer. */
+    }
+  }
+}
+
 async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
   const { body, idempotencyKey, auth = true, retrying = false } = options;
 
+  const requestSession = session;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (auth && session) headers.Authorization = `Bearer ${session.accessToken}`;
+  if (auth && requestSession) headers.Authorization = `Bearer ${requestSession.accessToken}`;
   if (idempotencyKey) headers['X-Idempotency-Key'] = idempotencyKey;
 
-  const res = await fetch(`${BASE}${path}`, {
+  const traceId = crypto.randomUUID();
+  const started = Date.now();
+  trace({ id: traceId, phase: 'request', method, path, time: started });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    trace({
+      id: traceId,
+      phase: 'network-error',
+      method,
+      path,
+      time: Date.now(),
+      durationMs: Date.now() - started,
+    });
+    throw new ApiError(
+      0,
+      'NETWORK_ERROR',
+      'Cannot reach Ledger. Check that the API is running, then retry with the same payment key.'
+    );
+  }
+
+  trace({
+    id: traceId,
+    phase: 'response',
     method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    path,
+    time: Date.now(),
+    status: res.status,
+    durationMs: Date.now() - started,
+    requestId: res.headers.get('X-Request-Id') ?? undefined,
   });
 
+  if (res.status === 401 && auth && session !== requestSession) {
+    throw new ApiError(
+      401,
+      'SESSION_CHANGED',
+      'Your session changed. Review the current account before retrying.'
+    );
+  }
   if (res.status === 401 && auth && session && !retrying) {
     if (await refreshTokens()) {
       return request<T>(method, path, { ...options, retrying: true });
     }
-    setSession(null);
-    onSessionLost?.();
+    if (session === requestSession) {
+      setSession(null);
+      onSessionLost?.();
+    }
   }
 
   const text = await res.text();
-  const payload = text ? JSON.parse(text) : null;
+  let payload;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    throw new ApiError(
+      res.status,
+      'INVALID_RESPONSE',
+      'Ledger returned an unreadable response. Check the API or proxy, then retry with the same payment key.'
+    );
+  }
 
   if (!res.ok) {
     const error = payload?.error ?? {};
@@ -273,7 +381,11 @@ async function request<T>(method: string, path: string, options: RequestOptions 
 // ── Endpoints ─────────────────────────────────────────────────────────────
 export const api = {
   health: () => fetch('/health').then((r) => r.json()),
-  ready: () => fetch('/ready').then(async (r) => ({ ok: r.ok, body: await r.json() })),
+  ready: () =>
+    fetch('/ready', { signal: AbortSignal.timeout(5000) }).then(async (r) => ({
+      ok: r.ok,
+      body: await r.json(),
+    })),
 
   auth: {
     register: (body: { email: string; password: string; name?: string; phone?: string }) =>

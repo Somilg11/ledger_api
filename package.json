@@ -29,7 +29,10 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "demo": "node web/tests/demo-tour.mjs"
+    "demo": "node web/tests/demo-tour.mjs",
+    "demo:up": "docker compose --profile web up -d --build --wait && docker compose exec -T api node scripts/seed-demo.mjs",
+    "check": "npm run typecheck && npm run lint && npm run test:unit && npm run build && npm run web:build",
+    "test:responsive": "npm --prefix web run test:responsive"
   },
   "repository": {
     "type": "git",
@@ -78,5 +81,8 @@
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.70.1"
+  },
+  "overrides": {
+    "minimatch@>=7 <11.0.1": "^11.0.8"
   }
 }

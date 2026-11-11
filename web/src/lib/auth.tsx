@@ -1,26 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  api,
-  getSession,
-  setSession,
-  onUnauthenticated,
-  type RegisterResult,
-  type SessionUser,
-} from '@/lib/api';
-
-interface AuthState {
-  user: SessionUser | null;
-  isAdmin: boolean;
-  ready: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  /** Returns the registration result so the caller can surface the mock link. */
-  register: (input: { email: string; password: string; name?: string }) => Promise<RegisterResult>;
-  logout: (allDevices?: boolean) => Promise<void>;
-  /** Re-reads the profile, e.g. after the email has been verified elsewhere. */
-  refreshProfile: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthState | null>(null);
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { api, getSession, setSession, onUnauthenticated, type SessionUser } from '@/lib/api';
+import { AuthContext, type AuthState } from '@/lib/auth-context';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(() => getSession()?.user ?? null);
@@ -109,10 +89,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
-
-export function useAuth(): AuthState {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
-  return ctx;
 }

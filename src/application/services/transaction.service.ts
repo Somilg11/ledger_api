@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import mongoose, { ClientSession, Types } from 'mongoose';
 import {
   TransactionModel,
@@ -70,8 +71,33 @@ export class TransactionService {
     return `${actor.id}:${key}`;
   }
 
-  private async findByIdempotencyKey(key: string): Promise<ITransaction | null> {
-    return TransactionModel.findOne({ idempotencyKey: key }).exec();
+  private requestFingerprint(operation: string, input: TransferInput | CashInput): string {
+    const { idempotencyKey: _key, ...payload } = input;
+    // Sort nested object keys so metadata order does not change the request identity.
+    const stable = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(stable);
+      if (value && typeof value === 'object') {
+        return Object.fromEntries(
+          Object.entries(value)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([key, item]) => [key, stable(item)])
+        );
+      }
+      return value;
+    };
+    return createHash('sha256')
+      .update(JSON.stringify([operation, stable(payload)]))
+      .digest('hex');
+  }
+
+  private async findByIdempotencyKey(key: string, fingerprint: string): Promise<ITransaction | null> {
+    const existing = await TransactionModel.findOne({ idempotencyKey: key }).exec();
+    if (existing && existing.requestFingerprint !== fingerprint) {
+      // Historical rows without a fingerprint cannot prove payload equality.
+      // Refuse rather than return a transaction for an unrelated request.
+      throw new ConflictError('This idempotency key was already used with a different request payload');
+    }
+    return existing;
   }
 
   /**
@@ -130,6 +156,7 @@ export class TransactionService {
       // sanitizeFilter (which defends against injected operators) does not
       // rewrite it into an equality match.
       filter.availableBalance = mongoose.trusted({ $gte: amount });
+      filter.status = 'ACTIVE';
     }
 
     return AccountModel.findOneAndUpdate(
@@ -139,9 +166,14 @@ export class TransactionService {
     ).exec();
   }
 
-  private async credit(accountId: Types.ObjectId | string, amount: number, session: ClientSession) {
+  private async credit(
+    accountId: Types.ObjectId | string,
+    amount: number,
+    session: ClientSession,
+    allowInactive = false
+  ) {
     return AccountModel.findOneAndUpdate(
-      { _id: accountId },
+      { _id: accountId, ...(allowInactive ? {} : { status: 'ACTIVE' }) },
       { $inc: { balance: amount, availableBalance: amount } },
       { new: true, session }
     ).exec();
@@ -157,6 +189,7 @@ export class TransactionService {
       to?: IAccount | null;
       actorId: string;
       idempotencyKey?: string;
+      requestFingerprint?: string;
       reference?: string;
       metadata?: Record<string, unknown>;
     }
@@ -172,6 +205,7 @@ export class TransactionService {
           status: 'COMPLETED',
           initiatedBy: new Types.ObjectId(data.actorId),
           idempotencyKey: data.idempotencyKey,
+          requestFingerprint: data.requestFingerprint,
           reference: data.reference,
           metadata: data.metadata,
           completedAt: new Date(),
@@ -207,9 +241,13 @@ export class TransactionService {
   }
 
   /** Maps a duplicate-key crash on the idempotency index to the original result. */
-  private async resolveDuplicate(key: string | undefined, err: unknown): Promise<ITransaction> {
+  private async resolveDuplicate(
+    key: string | undefined,
+    fingerprint: string,
+    err: unknown
+  ): Promise<ITransaction> {
     if (key && (err as { code?: number }).code === 11000) {
-      const existing = await this.findByIdempotencyKey(key);
+      const existing = await this.findByIdempotencyKey(key, fingerprint);
       if (existing) return existing;
     }
     throw err;
@@ -219,13 +257,14 @@ export class TransactionService {
     this.assertVerified(actor);
     const amount = assertValidAmount(input.amount);
     const idempotencyKey = this.scopedKey(actor, input.idempotencyKey);
+    const fingerprint = this.requestFingerprint('createTransfer', input);
 
     if (String(input.fromAccountId) === String(input.toAccountId)) {
       throw new ValidationError('fromAccount and toAccount must be different');
     }
 
     if (idempotencyKey) {
-      const existing = await this.findByIdempotencyKey(idempotencyKey);
+      const existing = await this.findByIdempotencyKey(idempotencyKey, fingerprint);
       if (existing) return existing;
     }
 
@@ -265,12 +304,13 @@ export class TransactionService {
           to: credited,
           actorId: actor.id,
           idempotencyKey,
+          requestFingerprint: fingerprint,
           reference: input.reference,
           metadata: input.metadata,
         });
       });
     } catch (err) {
-      return this.resolveDuplicate(idempotencyKey, err);
+      return this.resolveDuplicate(idempotencyKey, fingerprint, err);
     }
   }
 
@@ -278,13 +318,14 @@ export class TransactionService {
     this.assertVerified(actor);
     const amount = assertValidAmount(input.amount);
     const idempotencyKey = this.scopedKey(actor, input.idempotencyKey);
+    const fingerprint = this.requestFingerprint('deposit', input);
 
     if (!isAdmin(actor) && !allowSelfDeposit) {
       throw new ForbiddenError('Only an administrator can deposit funds');
     }
 
     if (idempotencyKey) {
-      const existing = await this.findByIdempotencyKey(idempotencyKey);
+      const existing = await this.findByIdempotencyKey(idempotencyKey, fingerprint);
       if (existing) return existing;
     }
 
@@ -308,12 +349,13 @@ export class TransactionService {
           to: credited,
           actorId: actor.id,
           idempotencyKey,
+          requestFingerprint: fingerprint,
           reference: input.reference,
           metadata: input.metadata,
         });
       });
     } catch (err) {
-      return this.resolveDuplicate(idempotencyKey, err);
+      return this.resolveDuplicate(idempotencyKey, fingerprint, err);
     }
   }
 
@@ -321,9 +363,10 @@ export class TransactionService {
     this.assertVerified(actor);
     const amount = assertValidAmount(input.amount);
     const idempotencyKey = this.scopedKey(actor, input.idempotencyKey);
+    const fingerprint = this.requestFingerprint('withdraw', input);
 
     if (idempotencyKey) {
-      const existing = await this.findByIdempotencyKey(idempotencyKey);
+      const existing = await this.findByIdempotencyKey(idempotencyKey, fingerprint);
       if (existing) return existing;
     }
 
@@ -347,12 +390,13 @@ export class TransactionService {
           to: credited,
           actorId: actor.id,
           idempotencyKey,
+          requestFingerprint: fingerprint,
           reference: input.reference,
           metadata: input.metadata,
         });
       });
     } catch (err) {
-      return this.resolveDuplicate(idempotencyKey, err);
+      return this.resolveDuplicate(idempotencyKey, fingerprint, err);
     }
   }
 
@@ -405,6 +449,7 @@ export class TransactionService {
     this.assertVerified(actor);
     const amount = assertValidAmount(input.amount);
     const idempotencyKey = this.scopedKey(actor, input.idempotencyKey);
+    const fingerprint = this.requestFingerprint('authorize', input);
 
     if (String(input.fromAccountId) === String(input.toAccountId)) {
       throw new ValidationError('fromAccount and toAccount must be different');
@@ -416,7 +461,7 @@ export class TransactionService {
     }
 
     if (idempotencyKey) {
-      const existing = await this.findByIdempotencyKey(idempotencyKey);
+      const existing = await this.findByIdempotencyKey(idempotencyKey, fingerprint);
       if (existing) return existing;
     }
 
@@ -441,7 +486,7 @@ export class TransactionService {
         // Only availableBalance moves, and only if it covers the amount. Two
         // simultaneous holds cannot both reserve the same funds.
         const reserved = await AccountModel.findOneAndUpdate(
-          { _id: source._id, availableBalance: mongoose.trusted({ $gte: amount }) },
+          { _id: source._id, status: 'ACTIVE', availableBalance: mongoose.trusted({ $gte: amount }) },
           { $inc: { availableBalance: -amount } },
           { new: true, session }
         ).exec();
@@ -459,6 +504,7 @@ export class TransactionService {
               status: 'PENDING',
               initiatedBy: new Types.ObjectId(actor.id),
               idempotencyKey,
+              requestFingerprint: fingerprint,
               reference: input.reference,
               metadata: input.metadata,
               expiresAt: new Date(Date.now() + ttl * 1000),
@@ -470,7 +516,7 @@ export class TransactionService {
         return txn;
       });
     } catch (err) {
-      return this.resolveDuplicate(idempotencyKey, err);
+      return this.resolveDuplicate(idempotencyKey, fingerprint, err);
     }
   }
 
@@ -607,7 +653,16 @@ export class TransactionService {
 
     const currency = assertSupportedCurrency(original.currency);
 
-    return this.inTransaction(async (session) => {
+    const reversal = await this.inTransaction(async (session) => {
+      // Claim the original inside the transaction. On a write conflict MongoDB
+      // retries this callback; the losing request then sees REVERSED.
+      const claimed = await TransactionModel.findOneAndUpdate(
+        { _id: original._id, status: 'COMPLETED' },
+        { $set: { status: 'REVERSED' } },
+        { new: true, session }
+      ).exec();
+      if (!claimed) throw new ConflictError('Transaction has already been reversed');
+
       // A reversal is a new, opposite transaction. The original row and its
       // journal entries are never edited - that is what keeps the audit trail
       // trustworthy.
@@ -615,7 +670,7 @@ export class TransactionService {
         ? await this.debit(original.toAccount, original.amount, session, true)
         : null;
       const destination = original.fromAccount
-        ? await this.credit(original.fromAccount, original.amount, session)
+        ? await this.credit(original.fromAccount, original.amount, session, true)
         : null;
 
       if (!source && !destination) throw new AppError('REVERSAL_FAILED', 'Nothing to reverse', 409);
@@ -631,24 +686,20 @@ export class TransactionService {
         metadata: { reversalOf: String(original._id), reason },
       });
 
-      await TransactionModel.updateOne(
-        { _id: original._id },
-        { $set: { status: 'REVERSED' } },
-        { session }
-      ).exec();
-
-      // Recorded outside the money movement: an audit failure must not undo a
-      // reversal the operator has already performed.
-      void this.audit.record(actor, {
-        action: 'TRANSACTION_REVERSED',
-        targetType: 'TRANSACTION',
-        targetId: original._id,
-        subjectUserId: original.initiatedBy ? String(original.initiatedBy) : undefined,
-        reason,
-        metadata: { amount: original.amount, currency: original.currency, reversalId: String(reversal._id) },
-      });
-
       return reversal;
     });
+
+    // Recorded outside the money movement: an audit failure must not undo a
+    // reversal the operator has already performed.
+    void this.audit.record(actor, {
+      action: 'TRANSACTION_REVERSED',
+      targetType: 'TRANSACTION',
+      targetId: original._id,
+      subjectUserId: original.initiatedBy ? String(original.initiatedBy) : undefined,
+      reason,
+      metadata: { amount: original.amount, currency: original.currency, reversalId: String(reversal._id) },
+    });
+
+    return reversal;
   }
 }
